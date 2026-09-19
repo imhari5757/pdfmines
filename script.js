@@ -1178,6 +1178,8 @@ function stopCaptureCamera(){
     captureStream=null;
   }
   captureVideo.srcObject=null;
+  captureVideo.style.removeProperty("aspect-ratio");
+  if(captureVideo.parentElement) captureVideo.parentElement.style.removeProperty("aspect-ratio");
   captureStartCamera.disabled=false;
   captureTakePhoto.disabled=true;
   captureStopCamera.disabled=true;
@@ -1190,6 +1192,17 @@ async function startCaptureCamera(){
     captureStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false});
     captureVideo.srcObject=captureStream;
     await captureVideo.play();
+    // Match the preview container to the real camera frame ratio. This prevents
+    // artificial left/right pillar-box bars without cropping the live frame.
+    const syncCameraAspect = () => {
+      if(captureVideo.videoWidth && captureVideo.videoHeight){
+        const ratio = captureVideo.videoWidth / captureVideo.videoHeight;
+        captureVideo.style.aspectRatio = `${captureVideo.videoWidth} / ${captureVideo.videoHeight}`;
+        captureVideo.parentElement.style.aspectRatio = `${captureVideo.videoWidth} / ${captureVideo.videoHeight}`;
+      }
+    };
+    syncCameraAspect();
+    captureVideo.onloadedmetadata = syncCameraAspect;
     captureVideoPlaceholder.style.display="none";
     captureStartCamera.disabled=true;
     captureTakePhoto.disabled=false;

@@ -189,9 +189,9 @@ body.modal-open{overflow:hidden}
 .capture-options{display:grid;gap:14px;margin:16px 0 8px;border:1px solid #e7e9f0;border-radius:18px;padding:18px;background:#fff}
 .capture-header{display:flex;justify-content:space-between;gap:12px}
 .capture-subtitle{font-size:12px;color:#737b8b;margin-top:4px;line-height:1.45}
-.capture-camera-card{position:relative;border:1px solid #dfe3ed;border-radius:16px;background:#111827;overflow:hidden;min-height:180px}
-.capture-video{display:block;width:100%;max-height:360px;min-height:180px;object-fit:contain;background:#111827}
-.capture-video-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#cbd5e1;font-size:13px;pointer-events:none}
+.capture-camera-card{position:relative;border:1px solid #dfe3ed;border-radius:16px;background:#111827;overflow:hidden;min-height:0}
+.capture-video{display:block;width:100%;height:auto;max-height:none;min-height:0;object-fit:fill;background:#111827}
+.capture-video-placeholder{position:relative;min-height:220px;display:grid;place-items:center;color:#cbd5e1;font-size:13px;pointer-events:none}
 .capture-camera-actions{display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:#fff;border-top:1px solid #e5e8f0}
 .capture-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .capture-upload-row span{font-size:12px;color:#7a8190}
