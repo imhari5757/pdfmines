@@ -28,34 +28,101 @@ function addFiles(newFiles){
 }
 
 let desktopDragIndex = null;
-let touchDragEl = null;
-let touchDragActive = false;
+let touchDrag = {
+  active:false, startIndex:-1, el:null, ghost:null,
+  hoverIndex:-1, lastX:0, lastY:0, pointerId:null,
+  startX:0, startY:0
+};
 
-function reorderFiles(fromIndex, toIndex){
-  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= files.length || toIndex >= files.length) return;
-  const moved = files.splice(fromIndex, 1)[0];
-  files.splice(toIndex, 0, moved);
+function reorderFiles(fromIndex,toIndex){
+  if(fromIndex===toIndex || fromIndex<0 || toIndex<0 ||
+     fromIndex>=files.length || toIndex>=files.length) return;
+  const moved=files.splice(fromIndex,1)[0];
+  files.splice(toIndex,0,moved);
 }
 
-function commitTouchOrder(){
-  if (!touchDragActive) return;
-  const order = [...thumbs.querySelectorAll(".thumb")]
-    .map(el => Number(el.dataset.fileIndex))
-    .filter(Number.isInteger);
+function makeTouchGhost(el,x,y){
+  const r=el.getBoundingClientRect();
+  const ghost=el.cloneNode(true);
+  ghost.classList.add("touch-drag-ghost");
+  ghost.classList.remove("dragging","drag-over");
+  ghost.style.width=`${r.width}px`;
+  ghost.style.height=`${r.height}px`;
+  ghost.style.left=`${x-r.width/2}px`;
+  ghost.style.top=`${y-r.height/2}px`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
 
-  if (order.length === files.length) {
-    const reordered = order.map(i => files[i]);
-    files = reordered;
+function updateTouchGhost(x,y){
+  if(!touchDrag.ghost) return;
+  const w=touchDrag.ghost.offsetWidth;
+  const h=touchDrag.ghost.offsetHeight;
+  touchDrag.ghost.style.left=`${x-w/2}px`;
+  touchDrag.ghost.style.top=`${y-h/2}px`;
+}
+
+function findTouchHoverIndex(x,y){
+  let best=-1, bestD=Infinity;
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    if(el===touchDrag.el) return;
+    const i=Number(el.dataset.fileIndex);
+    if(!Number.isInteger(i)) return;
+    const r=el.getBoundingClientRect();
+    const d=Math.hypot(x-(r.left+r.width/2),(y-(r.top+r.height/2))*0.45);
+    if(d<bestD){bestD=d;best=i;}
+  });
+  return best;
+}
+
+function showTouchDropTarget(index){
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    el.classList.toggle("drag-over",
+      Number(el.dataset.fileIndex)===index && el!==touchDrag.el);
+  });
+}
+
+function resetTouchDrag(){
+  if(touchDrag.ghost) touchDrag.ghost.remove();
+  touchDrag.el?.classList.remove("dragging");
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    el.classList.remove("drag-over");
+    el.removeAttribute("aria-grabbed");
+  });
+  touchDrag={
+    active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,
+    lastX:0,lastY:0,pointerId:null,startX:0,startY:0
+  };
+}
+
+function finishTouchDrag(){
+  if(!touchDrag.active){resetTouchDrag();return;}
+  const from=touchDrag.startIndex;
+  const hover=touchDrag.hoverIndex;
+
+  if(hover>=0 && hover!==from){
+    const target=[...thumbs.querySelectorAll(".thumb")]
+      .find(el=>Number(el.dataset.fileIndex)===hover);
+    let to=hover;
+    if(target){
+      const r=target.getBoundingClientRect();
+      if(touchDrag.lastX>r.left+r.width/2) to=hover+1;
+    }
+    if(to>from) to--;
+    to=Math.max(0,Math.min(files.length-1,to));
+    reorderFiles(from,to);
   }
-  touchDragEl = null;
-  touchDragActive = false;
-  [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
+
+  resetTouchDrag();
   render();
 }
 
 function render(){
   fileArea.classList.toggle("hidden", files.length === 0);
   fileCount.textContent = `${files.length} page${files.length === 1 ? "" : "s"}`;
+  thumbs.querySelectorAll("img").forEach(img=>{
+    if(img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  });
   thumbs.innerHTML = "";
 
   files.forEach((file, i) => {
@@ -68,7 +135,6 @@ function render(){
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
     img.draggable = false;
-    img.onload = () => URL.revokeObjectURL(img.src);
 
     const num = document.createElement("span");
     num.className = "num";
@@ -126,42 +192,55 @@ function render(){
       }
     });
 
-    // Touch / mobile drag. The thumbnail can be dragged left/right without
-    // needing a separate reorder button.
+    // Touch / mobile drag: use a visual floating copy. We never move the
+    // real DOM thumbnail during the finger movement, avoiding mobile
+    // browser drag/scroll errors.
     div.addEventListener("pointerdown", e => {
-      if (e.pointerType !== "touch" || e.target.closest("button")) return;
-      touchDragEl = div;
-      touchDragActive = false;
-    });
+      if(e.pointerType!=="touch" || e.target.closest("button")) return;
+      touchDrag.active=false;
+      touchDrag.startIndex=i;
+      touchDrag.el=div;
+      touchDrag.pointerId=e.pointerId;
+      touchDrag.startX=e.clientX;
+      touchDrag.startY=e.clientY;
+      touchDrag.lastX=e.clientX;
+      touchDrag.lastY=e.clientY;
+      try{div.setPointerCapture(e.pointerId);}catch(_){}
+    },{passive:false});
 
     div.addEventListener("pointermove", e => {
-      if (e.pointerType !== "touch" || touchDragEl !== div) return;
+      if(e.pointerType!=="touch" || touchDrag.el!==div ||
+         touchDrag.pointerId!==e.pointerId) return;
 
-      if (!touchDragActive) {
-        touchDragActive = true;
+      touchDrag.lastX=e.clientX;
+      touchDrag.lastY=e.clientY;
+
+      if(!touchDrag.active){
+        if(Math.hypot(e.clientX-touchDrag.startX,e.clientY-touchDrag.startY)<8) return;
+        touchDrag.active=true;
+        e.preventDefault();
         div.classList.add("dragging");
-        try { div.setPointerCapture(e.pointerId); } catch (_) {}
+        div.setAttribute("aria-grabbed","true");
+        touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
       }
 
       e.preventDefault();
-      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".thumb");
-      if (!target || target === div || target.parentElement !== thumbs) return;
-
-      [...thumbs.children].forEach(el => el.classList.remove("drag-over"));
-      target.classList.add("drag-over");
-
-      const rect = target.getBoundingClientRect();
-      const before = e.clientX < rect.left + rect.width / 2;
-      if (before) thumbs.insertBefore(div, target);
-      else thumbs.insertBefore(div, target.nextSibling);
-    });
+      updateTouchGhost(e.clientX,e.clientY);
+      touchDrag.hoverIndex=findTouchHoverIndex(e.clientX,e.clientY);
+      showTouchDropTarget(touchDrag.hoverIndex);
+    },{passive:false});
 
     div.addEventListener("pointerup", e => {
-      if (e.pointerType === "touch" && touchDragEl === div) commitTouchOrder();
-    });
+      if(e.pointerType==="touch" && touchDrag.el===div &&
+         touchDrag.pointerId===e.pointerId){
+        e.preventDefault();
+        finishTouchDrag();
+      }
+    },{passive:false});
 
     div.addEventListener("pointercancel", e => {
-      if (e.pointerType === "touch" && touchDragEl === div) commitTouchOrder();
+      if(e.pointerType==="touch" && touchDrag.el===div &&
+         touchDrag.pointerId===e.pointerId) resetTouchDrag();
     });
   });
 
@@ -198,9 +277,6 @@ $("createBtn").onclick = async () => {
     // When a target size is requested, reduce both JPEG quality AND
     // image resolution progressively. This is much more effective than
     // lowering JPEG quality alone, especially for very small targets.
-    // Fast target-size mode: adjust JPEG quality only. Resolution is kept
-    // unchanged so conversion stays fast and text/detail remain sharp.
-    // Fewer passes = much faster PDF creation.
     const compressionLevels = targetSize
       ? [1, 0.78, 0.60, 0.45, 0.32, 0.22]
       : [1];
@@ -368,7 +444,10 @@ async function prepareImage(file, quality, factor = 1, colorMode = "color") {
   }
 
   // Mild unsharp-mask style enhancement. More restrained at lower quality.
-  const sharpenAmount = quality === "small" ? 0.16 : quality === "medium" ? 0.22 : 0.28;
+  const baseSharpen = quality === "small" ? 0.16 : quality === "medium" ? 0.22 : 0.28;
+  // Reduce sharpening at extreme compression levels so it does not amplify
+  // JPEG noise or create halos around small text.
+  const sharpenAmount = baseSharpen * Math.min(1, Math.sqrt(factor));
   if (sharpenAmount > 0 && width > 2 && height > 2) {
     const srcPx = new Uint8ClampedArray(px);
     const idx = (x, y) => (y * width + x) * 4;
