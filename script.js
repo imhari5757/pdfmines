@@ -1200,60 +1200,94 @@ async function fileToDataUrlSafe(file){
   return await fileToDataURL(file);
 }
 
-function clampCrop(c){
-  // Keep each edge independent. Never swap opposite edges while dragging:
-  // swapping makes a corner jump and is what causes the non-elastic feel.
-  const min=0.004;
-  let l=Math.max(0,Math.min(1,c.l)), t=Math.max(0,Math.min(1,c.t));
-  let r=Math.max(0,Math.min(1,c.r)), b=Math.max(0,Math.min(1,c.b));
-  if(r-l<min){
-    if(c.r!==undefined && c.r<=c.l) r=Math.min(1,l+min);
-    else l=Math.max(0,r-min);
+function clampQuad(q){
+  const clamp=v=>Math.max(0.002,Math.min(0.998,Number(v)||0));
+  const out={};
+  for(const k of ["tl","tr","br","bl"]){
+    const p=q?.[k]||{};
+    out[k]={x:clamp(p.x),y:clamp(p.y)};
   }
-  if(b-t<min){
-    if(c.b!==undefined && c.b<=c.t) b=Math.min(1,t+min);
-    else t=Math.max(0,b-min);
-  }
-  return {l,t,r,b};
+  return out;
+}
+
+function rectToQuad(c={l:0,t:0,r:1,b:1}){
+  return {tl:{x:c.l,y:c.t},tr:{x:c.r,y:c.t},br:{x:c.r,y:c.b},bl:{x:c.l,y:c.b}};
+}
+
+function quadToPoints(q,rect){
+  return {
+    tl:{x:rect.x+q.tl.x*rect.w,y:rect.y+q.tl.y*rect.h},
+    tr:{x:rect.x+q.tr.x*rect.w,y:rect.y+q.tr.y*rect.h},
+    br:{x:rect.x+q.br.x*rect.w,y:rect.y+q.br.y*rect.h},
+    bl:{x:rect.x+q.bl.x*rect.w,y:rect.y+q.bl.y*rect.h}
+  };
 }
 
 async function detectDocumentCrop(file){
   const img=await imageFromFile(file);
-  const max=900;
+  const max=700;
   const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
-  const w=Math.max(1,Math.round(img.naturalWidth*scale));
-  const h=Math.max(1,Math.round(img.naturalHeight*scale));
+  const w=Math.max(80,Math.round(img.naturalWidth*scale));
+  const h=Math.max(80,Math.round(img.naturalHeight*scale));
   const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
-  const ctx=canvas.getContext("2d",{willReadFrequently:true});
-  ctx.drawImage(img,0,0,w,h);
-  const d=ctx.getImageData(0,0,w,h).data;
-  const sample=(x,y)=>{const i=(y*w+x)*4;return [d[i],d[i+1],d[i+2]];};
-  const pts=[sample(2,2),sample(w-3,2),sample(2,h-3),sample(w-3,h-3)];
-  const bg=[0,1,2].map(c=>pts.reduce((s,p)=>s+p[c],0)/pts.length);
-  const dist=(x,y)=>{const i=(y*w+x)*4;return Math.sqrt((d[i]-bg[0])**2+(d[i+1]-bg[1])**2+(d[i+2]-bg[2])**2);};
-  const threshold=34;
-  const rowScore=y=>{let hits=0, total=0; const step=Math.max(1,Math.floor(w/140)); for(let x=0;x<w;x+=step){total++; if(dist(x,y)>threshold) hits++;} return hits/Math.max(1,total);};
-  const colScore=x=>{let hits=0,total=0; const step=Math.max(1,Math.floor(h/140)); for(let y=0;y<h;y+=step){total++; if(dist(x,y)>threshold) hits++;} return hits/Math.max(1,total);};
-  const edgeFrac=0.018;
-  let left=0,right=w-1,top=0,bottom=h-1;
-  // Require persistent foreground across several nearby scan lines/columns.
-  const findStart=(fn,n)=>{for(let i=0;i<n;i++) if(fn(i)>edgeFrac && fn(Math.min(n-1,i+2))>edgeFrac) return i; return 0;};
-  const findEnd=(fn,n)=>{for(let i=n-1;i>=0;i--) if(fn(i)>edgeFrac && fn(Math.max(0,i-2))>edgeFrac) return i; return n-1;};
-  left=findStart(colScore,w); right=findEnd(colScore,w); top=findStart(rowScore,h); bottom=findEnd(rowScore,h);
-  const bw=right-left+1, bh=bottom-top+1;
-  const ratioW=bw/w, ratioH=bh/h;
-  // Conservative fallback: if detection is weak or nearly full-frame, keep the full image.
-  let confidence=0;
-  confidence += ratioW<0.96 ? 1 : 0;
-  confidence += ratioH<0.96 ? 1 : 0;
-  const paddingX=Math.max(8,Math.round(w*0.025));
-  const paddingY=Math.max(8,Math.round(h*0.025));
-  if(confidence===0 || ratioW<0.60 || ratioH<0.60){
-    return {l:0,t:0,r:1,b:1,confidence:0};
+  const ctx=canvas.getContext("2d",{willReadFrequently:true}); ctx.drawImage(img,0,0,w,h);
+  const data=ctx.getImageData(0,0,w,h).data;
+  const mask=new Uint8Array(w*h);
+  const satLum=(r,g,b)=>{const mx=Math.max(r,g,b),mn=Math.min(r,g,b);return {sat:mx?((mx-mn)/mx):0,lum:.299*r+.587*g+.114*b};};
+  const corners=[[2,2],[w-3,2],[2,h-3],[w-3,h-3]];
+  let bgLum=0; for(const [x,y] of corners){const i=(y*w+x)*4;bgLum+=satLum(data[i],data[i+1],data[i+2]).lum;} bgLum/=4;
+  const lumThreshold=Math.max(132,Math.min(205,bgLum+34));
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=(y*w+x)*4, z=satLum(data[i],data[i+1],data[i+2]);
+    // Conservative paper-likelihood test. Low saturation + reasonably bright.
+    if(z.lum>=lumThreshold && z.sat<0.42) mask[y*w+x]=1;
   }
-  left=Math.max(0,left-paddingX); right=Math.min(w-1,right+paddingX);
-  top=Math.max(0,top-paddingY); bottom=Math.min(h-1,bottom+paddingY);
-  return {l:left/w,t:top/h,r:(right+1)/w,b:(bottom+1)/h,confidence:confidence};
+  // Fill small holes / smooth isolated camera noise.
+  const smoothed=new Uint8Array(mask);
+  for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+    let n=0; for(let yy=-1;yy<=1;yy++) for(let xx=-1;xx<=1;xx++) n+=mask[(y+yy)*w+(x+xx)];
+    if(n>=5) smoothed[y*w+x]=1;
+  }
+  const seen=new Uint8Array(w*h); const comps=[];
+  const queue=new Int32Array(w*h); let qh=0,qt=0;
+  for(let sy=0;sy<h;sy++) for(let sx=0;sx<w;sx++){
+    const si=sy*w+sx; if(!smoothed[si]||seen[si]) continue;
+    qh=qt=0; queue[qt++]=si; seen[si]=1; let count=0;
+    let minX=w,maxX=0,minY=h,maxY=0;
+    const pts=[];
+    while(qh<qt){
+      const idx=queue[qh++], y=Math.floor(idx/w), x=idx-y*w; count++;
+      minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+      pts.push([x,y]);
+      const ns=[idx-1,idx+1,idx-w,idx+w];
+      if(x===0) ns[0]=-1; if(x===w-1) ns[1]=-1; if(y===0) ns[2]=-1; if(y===h-1) ns[3]=-1;
+      for(const ni of ns) if(ni>=0&&ni<w*h&&!seen[ni]&&smoothed[ni]){seen[ni]=1;queue[qt++]=ni;}
+    }
+    if(count>Math.max(150,(w*h)*0.002)) comps.push({count,minX,maxX,minY,maxY,pts});
+  }
+  comps.sort((a,b)=>b.count-a.count);
+  const center=w*Math.floor(h/2)+Math.floor(w/2);
+  let comp=comps.find(c=>center>=c.minY*w+c.minX && center<=c.maxY*w+c.maxX) || comps[0];
+  if(!comp){return rectToQuad({l:0,t:0,r:1,b:1});}
+  const pts=comp.pts;
+  // Robust four-extreme-point estimate. We deliberately move the result slightly
+  // outward so text near the paper edge is not clipped by an over-aggressive crop.
+  let tl=pts[0],tr=pts[0],br=pts[0],bl=pts[0];
+  let a=Infinity,b=-Infinity,c=-Infinity,d=Infinity;
+  for(const p of pts){const x=p[0],y=p[1];
+    if(x+y<a){a=x+y;tl=p;} if(x-y>b){b=x-y;tr=p;}
+    if(x+y>c){c=x+y;br=p;} if(x-y<d){d=x-y;bl=p;}
+  }
+  const padX=Math.max(5,Math.round(w*.018)), padY=Math.max(5,Math.round(h*.018));
+  const push=(p,dx,dy)=>[Math.max(0,Math.min(w-1,p[0]+dx)),Math.max(0,Math.min(h-1,p[1]+dy))];
+  // Push each corner away from the component center, never inward.
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  tl=push(tl,tl[0]<cx?-padX:padX,tl[1]<cy?-padY:padY);
+  tr=push(tr,tr[0]>cx?padX:-padX,tr[1]<cy?-padY:padY);
+  br=push(br,br[0]>cx?padX:-padX,br[1]>cy?padY:-padY);
+  bl=push(bl,bl[0]<cx?-padX:padX,bl[1]>cy?padY:-padY);
+  const q={tl:{x:tl[0]/w,y:tl[1]/h},tr:{x:tr[0]/w,y:tr[1]/h},br:{x:br[0]/w,y:br[1]/h},bl:{x:bl[0]/w,y:bl[1]/h}};
+  return clampQuad(q);
 }
 
 function getDisplayedImageRect(){
@@ -1266,185 +1300,92 @@ function getDisplayedImageRect(){
 }
 
 function renderCrop(){
-  const item=captureItems[captureIndex];
-  const rect=getDisplayedImageRect();
-  if(!item || !rect) return;
-  const c=clampCrop(item.crop);
-  item.crop=c;
-  const x=rect.x+c.l*rect.w, y=rect.y+c.t*rect.h;
-  const w=(c.r-c.l)*rect.w, h=(c.b-c.t)*rect.h;
-  cropBox.style.left=`${x}px`; cropBox.style.top=`${y}px`; cropBox.style.width=`${w}px`; cropBox.style.height=`${h}px`;
-  $("cropShadeTop").style.height=`${y}px`;
-  $("cropShadeBottom").style.height=`${Math.max(0,cropViewport.clientHeight-(y+h))}px`;
-  $("cropShadeLeft").style.top=`${y}px`; $("cropShadeLeft").style.width=`${x}px`; $("cropShadeLeft").style.height=`${h}px`;
-  $("cropShadeRight").style.top=`${y}px`; $("cropShadeRight").style.width=`${Math.max(0,cropViewport.clientWidth-(x+w))}px`; $("cropShadeRight").style.height=`${h}px`;
-  cropInfo.textContent=item.auto ? "Border: automatic · safety padding applied" : "Border: manual";
+  const item=captureItems[captureIndex], rect=getDisplayedImageRect();
+  if(!item||!rect) return;
+  item.quad=clampQuad(item.quad||rectToQuad(item.crop));
+  const p=quadToPoints(item.quad,rect);
+  const svgW=cropViewport.clientWidth, svgH=cropViewport.clientHeight;
+  const pts=`${p.tl.x},${p.tl.y} ${p.tr.x},${p.tr.y} ${p.br.x},${p.br.y} ${p.bl.x},${p.bl.y}`;
+  const polygon=$("cropPolygon"); if(polygon) polygon.setAttribute("points",pts);
+  const shade=$("cropShadePath"); if(shade) shade.setAttribute("d",`M0 0 H${svgW} V${svgH} H0 Z M${pts} Z`);
+  const setLine=(id,a,b)=>{const el=$(id); if(el){el.setAttribute("x1",a.x);el.setAttribute("y1",a.y);el.setAttribute("x2",b.x);el.setAttribute("y2",b.y);}};
+  setLine("quadLineTop",p.tl,p.tr);setLine("quadLineRight",p.tr,p.br);setLine("quadLineBottom",p.br,p.bl);setLine("quadLineLeft",p.bl,p.tl);
+  [["quadTL",p.tl],["quadTR",p.tr],["quadBR",p.br],["quadBL",p.bl]].forEach(([id,v])=>{const el=$(id);if(el){el.setAttribute("cx",v.x);el.setAttribute("cy",v.y);}});
+  if(cropInfo) cropInfo.textContent=item.auto?"Border: automatic · perspective correction ready":"Border: manual · perspective correction ready";
 }
 
-function scheduleCropRender(){
-  if(cropRaf) return;
-  cropRaf=requestAnimationFrame(()=>{cropRaf=0;renderCrop();});
-}
+function scheduleCropRender(){ if(cropRaf) return; cropRaf=requestAnimationFrame(()=>{cropRaf=0;renderCrop();}); }
 
 async function selectCapturePage(index){
-  if(index<0 || index>=captureItems.length) return;
-  captureIndex=index;
-  const item=captureItems[index];
+  if(index<0||index>=captureItems.length)return;
+  captureIndex=index; const item=captureItems[index];
   captureEditorTitle.textContent=`Page ${index+1} · ${item.file.name}`;
-  cropImage.src=item.dataUrl;
-  cropImage.onload=()=>{renderCrop();};
+  cropImage.src=item.dataUrl; cropImage.onload=()=>renderCrop();
   document.querySelectorAll(".capture-page-chip").forEach((el,i)=>el.classList.toggle("active",i===index));
-  const radio=document.querySelector(`input[name="captureBorderMode"][value="${item.auto?"auto":"manual"}"]`);
-  if(radio) radio.checked=true;
-  captureEditorEmpty.classList.add("hidden");
-  captureEditor.classList.remove("hidden");
+  const radio=document.querySelector(`input[name="captureBorderMode"][value="${item.auto?"auto":"manual"}"]`); if(radio)radio.checked=true;
+  captureEditorEmpty.classList.add("hidden"); captureEditor.classList.remove("hidden");
 }
 
 async function addCaptureFiles(newFiles){
   for(const file of newFiles.filter(f=>/^image\/(jpeg|png|webp)$/i.test(f.type))){
-    const dataUrl=await fileToDataUrlSafe(file);
-    let crop={l:0,t:0,r:1,b:1};
-    let auto=true;
-    try{crop=await detectDocumentCrop(file);}catch(_){auto=false;}
-    captureItems.push({file,dataUrl,crop,auto});
+    const dataUrl=await fileToDataUrlSafe(file); let quad=rectToQuad(); let auto=true;
+    try{quad=await detectDocumentCrop(file);}catch(_){auto=false;}
+    captureItems.push({file,dataUrl,quad,auto});
   }
-  renderCapturePages();
-  if(captureItems.length) await selectCapturePage(captureItems.length-1);
+  renderCapturePages(); if(captureItems.length)await selectCapturePage(captureItems.length-1);
 }
 
 function renderCapturePages(){
-  capturePagesEl.innerHTML="";
-  captureItems.forEach((item,i)=>{
-    const b=document.createElement("button"); b.type="button"; b.className="capture-page-chip"; b.textContent=`${i+1} · ${item.file.name}`;
-    b.onclick=()=>selectCapturePage(i); capturePagesEl.appendChild(b);
-  });
+  capturePagesEl.innerHTML=""; captureItems.forEach((item,i)=>{const b=document.createElement("button");b.type="button";b.className="capture-page-chip";b.textContent=`${i+1} · ${item.file.name}`;b.onclick=()=>selectCapturePage(i);capturePagesEl.appendChild(b);});
 }
 
 async function capturePhoto(){
-  if(!captureStream || !captureVideo.videoWidth) return;
-  const canvas=document.createElement("canvas");
-  canvas.width=captureVideo.videoWidth; canvas.height=captureVideo.videoHeight;
-  const ctx=canvas.getContext("2d");
-  ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
-  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
-  await addCaptureFiles([makeImageFile(blob,`Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`)]);
-  stopCaptureCamera();
-  openCaptureReview();
+  if(!captureStream||!captureVideo.videoWidth)return;
+  const canvas=document.createElement("canvas");canvas.width=captureVideo.videoWidth;canvas.height=captureVideo.videoHeight;const ctx=canvas.getContext("2d");ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",.94));
+  await addCaptureFiles([makeImageFile(blob,`Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`)]);stopCaptureCamera();openCaptureReview();
 }
 
 async function recaptureCurrentPage(){
-  if(!captureStream || !captureVideo.videoWidth || !captureItems[captureIndex]){
-    await startCaptureCamera();
-    return;
-  }
-  const canvas=document.createElement("canvas");
-  canvas.width=captureVideo.videoWidth; canvas.height=captureVideo.videoHeight;
-  const ctx=canvas.getContext("2d"); ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
-  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
-  const file=makeImageFile(blob,`Capture_${String(captureIndex+1).padStart(2,"0")}.jpg`);
-  const dataUrl=await fileToDataUrlSafe(file);
-  let crop={l:0,t:0,r:1,b:1}, auto=true;
-  try{crop=await detectDocumentCrop(file);}catch(_){auto=false;}
-  captureItems[captureIndex]={file,dataUrl,crop,auto};
-  renderCapturePages();
-  await selectCapturePage(captureIndex);
-  stopCaptureCamera();
-  openCaptureReview();
+  if(!captureStream||!captureVideo.videoWidth||!captureItems[captureIndex]){await startCaptureCamera();return;}
+  const canvas=document.createElement("canvas");canvas.width=captureVideo.videoWidth;canvas.height=captureVideo.videoHeight;const ctx=canvas.getContext("2d");ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",.94));
+  const file=makeImageFile(blob,`Capture_${String(captureIndex+1).padStart(2,"0")}.jpg`);const dataUrl=await fileToDataUrlSafe(file);let quad=rectToQuad(),auto=true;try{quad=await detectDocumentCrop(file);}catch(_){auto=false;}
+  captureItems[captureIndex]={file,dataUrl,quad,auto};renderCapturePages();await selectCapturePage(captureIndex);stopCaptureCamera();openCaptureReview();
 }
 
-async function resetCurrentCrop(){
-  const item=captureItems[captureIndex]; if(!item) return;
-  item.crop={l:0,t:0,r:1,b:1}; item.auto=false;
-  document.querySelector('input[name="captureBorderMode"][value="manual"]')?.click();
-  renderCrop();
+async function resetCurrentCrop(){const item=captureItems[captureIndex];if(!item)return;item.quad=rectToQuad();item.auto=false;document.querySelector('input[name="captureBorderMode"][value="manual"]')?.click();renderCrop();}
+async function autoAdjustCurrentCrop(){const item=captureItems[captureIndex];if(!item)return;try{item.quad=await detectDocumentCrop(item.file);item.auto=true;document.querySelector('input[name="captureBorderMode"][value="auto"]')?.click();renderCrop();}catch(_){toolStatus.textContent="Automatic border detection could not analyze this image.";}}
+
+captureStartCamera?.addEventListener("click",startCaptureCamera);captureStopCamera?.addEventListener("click",stopCaptureCamera);captureTakePhoto?.addEventListener("click",capturePhoto);captureUploadBtn?.addEventListener("click",()=>captureUploadInput.click());captureUploadInput?.addEventListener("change",async()=>{const fs=[...captureUploadInput.files];captureUploadInput.value="";await addCaptureFiles(fs);});captureAutoAdjust?.addEventListener("click",autoAdjustCurrentCrop);captureResetCrop?.addEventListener("click",resetCurrentCrop);captureReviewBack?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});captureReviewRecapture?.addEventListener("click",async()=>{closeCaptureReview();await startCaptureCamera();});captureReviewAdd?.addEventListener("click",()=>{closeCaptureReview();renderCapturePages();});captureReviewNext?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});
+
+document.querySelectorAll('input[name="captureBorderMode"]').forEach(r=>r.addEventListener("change",async()=>{const item=captureItems[captureIndex];if(!item)return;if(r.value==="auto"&&r.checked)await autoAdjustCurrentCrop();if(r.value==="manual"&&r.checked){item.auto=false;renderCrop();}}));
+
+function beginQuadDrag(e,handle){const item=captureItems[captureIndex];if(!item)return;cropDrag={handle,startX:e.clientX,startY:e.clientY,startQuad:JSON.parse(JSON.stringify(item.quad)),pointerId:e.pointerId};try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}e.preventDefault();e.stopPropagation();}
+function updateQuadFromPointer(x,y){if(!cropDrag)return;const rect=getDisplayedImageRect();if(!rect)return;const dx=(x-cropDrag.startX)/rect.w,dy=(y-cropDrag.startY)/rect.h;const q=JSON.parse(JSON.stringify(cropDrag.startQuad));const h=cropDrag.handle;
+  if(h!=="move"){const p=q[h];p.x=Math.max(.002,Math.min(.998,p.x+dx));p.y=Math.max(.002,Math.min(.998,p.y+dy));}
+  else {for(const k of ["tl","tr","br","bl"]){q[k].x=Math.max(.002,Math.min(.998,cropDrag.startQuad[k].x+dx));q[k].y=Math.max(.002,Math.min(.998,cropDrag.startQuad[k].y+dy));}}
+  const item=captureItems[captureIndex];if(item){item.quad=clampQuad(q);item.auto=false;}scheduleCropRender();
 }
+function endQuadDrag(e){if(cropDrag&&(!e.pointerId||cropDrag.pointerId===e.pointerId)){cropDrag=null;cropBox?.classList.remove("is-resizing");renderCrop();}}
+document.querySelectorAll(".quad-handle").forEach(el=>{el.addEventListener("pointerdown",e=>beginQuadDrag(e,el.dataset.handle));el.addEventListener("pointermove",e=>{if(cropDrag&&cropDrag.pointerId===e.pointerId){e.preventDefault();updateQuadFromPointer(e.clientX,e.clientY);}});el.addEventListener("pointerup",endQuadDrag);el.addEventListener("pointercancel",endQuadDrag);});
+window.addEventListener("resize",()=>{if(activeTool==="capture")scheduleCropRender();});
 
-async function autoAdjustCurrentCrop(){
-  const item=captureItems[captureIndex]; if(!item) return;
-  try{
-    item.crop=await detectDocumentCrop(item.file); item.auto=true;
-    document.querySelector('input[name="captureBorderMode"][value="auto"]')?.click();
-    renderCrop();
-  }catch(err){ toolStatus.textContent="Automatic border detection could not analyze this image."; }
+function solveLinear(A,b){const n=b.length,M=A.map((r,i)=>[...r,b[i]]);for(let i=0;i<n;i++){let p=i;for(let r=i+1;r<n;r++)if(Math.abs(M[r][i])>Math.abs(M[p][i]))p=r;if(Math.abs(M[p][i])<1e-10)throw new Error("Perspective transform failed.");[M[i],M[p]]=[M[p],M[i]];const d=M[i][i];for(let c=i;c<=n;c++)M[i][c]/=d;for(let r=0;r<n;r++){if(r===i)continue;const f=M[r][i];if(!f)continue;for(let c=i;c<=n;c++)M[r][c]-=f*M[i][c];}}return M.map(r=>r[n]);}
+function homographyFromDestToSource(src){
+  const dst=[[0,0],[1,0],[1,1],[0,1]];const A=[],B=[];
+  for(let i=0;i<4;i++){const [u,v]=dst[i],{x,y}=src[i];A.push([u,v,1,0,0,0,-u*x,-v*x]);B.push(x);A.push([0,0,0,u,v,1,-u*y,-v*y]);B.push(y);}
+  return solveLinear(A,B);
 }
-
-captureStartCamera?.addEventListener("click",startCaptureCamera);
-captureStopCamera?.addEventListener("click",stopCaptureCamera);
-captureTakePhoto?.addEventListener("click",capturePhoto);
-captureUploadBtn?.addEventListener("click",()=>captureUploadInput.click());
-captureUploadInput?.addEventListener("change",async()=>{const fs=[...captureUploadInput.files];captureUploadInput.value="";await addCaptureFiles(fs);});
-captureAutoAdjust?.addEventListener("click",autoAdjustCurrentCrop);
-captureResetCrop?.addEventListener("click",resetCurrentCrop);
-captureReviewBack?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});
-captureReviewRecapture?.addEventListener("click",async()=>{closeCaptureReview();await startCaptureCamera();});
-captureReviewAdd?.addEventListener("click",()=>{closeCaptureReview();renderCapturePages();});
-captureReviewNext?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});
-
-document.querySelectorAll('input[name="captureBorderMode"]').forEach(r=>r.addEventListener("change",async()=>{
-  const item=captureItems[captureIndex]; if(!item) return;
-  if(r.value==="auto" && r.checked){ await autoAdjustCurrentCrop(); }
-  if(r.value==="manual" && r.checked){ item.auto=false; renderCrop(); }
-}));
-
-function updateCropFromPointer(clientX,clientY){
-  if(!cropDrag) return;
-  const rect=getDisplayedImageRect(); if(!rect) return;
-  const dx=(clientX-cropDrag.startX)/rect.w, dy=(clientY-cropDrag.startY)/rect.h;
-  const s=cropDrag.startCrop; const h=cropDrag.handle;
-  let c={...s};
-  const min=0.004;
-
-  if(h!=="move") {
-    if(h.includes("w")) c.l=Math.max(0,Math.min(s.r-min,s.l+dx));
-    if(h.includes("e")) c.r=Math.min(1,Math.max(s.l+min,s.r+dx));
-    if(h.includes("n")) c.t=Math.max(0,Math.min(s.b-min,s.t+dy));
-    if(h.includes("s")) c.b=Math.min(1,Math.max(s.t+min,s.b+dy));
-  } else {
-    const ww=s.r-s.l, hh=s.b-s.t;
-    c.l=Math.max(0,Math.min(1-ww,s.l+dx)); c.r=c.l+ww;
-    c.t=Math.max(0,Math.min(1-hh,s.t+dy)); c.b=c.t+hh;
-  }
-  const item=captureItems[captureIndex];
-  if(item){item.crop=clampCrop(c);item.auto=false;}
-  cropPending=item?.crop || null;
-  scheduleCropRender();
+function warpPerspective(img,quad){
+  const sw=img.naturalWidth,sh=img.naturalHeight;const src=[quad.tl,quad.tr,quad.br,quad.bl].map(p=>({x:p.x*sw,y:p.y*sh}));
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);let W=Math.max(dist(src[0],src[1]),dist(src[3],src[2]));let H=Math.max(dist(src[0],src[3]),dist(src[1],src[2]));
+  const maxSide=2200,scale=Math.min(1,maxSide/Math.max(W,H));W=Math.max(1,Math.round(W*scale));H=Math.max(1,Math.round(H*scale));
+  const c=document.createElement("canvas");c.width=W;c.height=H;const out=c.getContext("2d"),sd=document.createElement("canvas");sd.width=sw;sd.height=sh;const sx=sd.getContext("2d");sx.drawImage(img,0,0);const S=sx.getImageData(0,0,sw,sh).data, O=out.createImageData(W,H), D=O.data;
+  const h=homographyFromDestToSource(src);
+  for(let y=0;y<H;y++){const v=y/(H-1||1);for(let x=0;x<W;x++){const u=x/(W-1||1),den=h[6]*u+h[7]*v+1,xx=(h[0]*u+h[1]*v+h[2])/den,yy=(h[3]*u+h[4]*v+h[5])/den,px=xx*(sw-1),py=yy*(sh-1);if(px<0||py<0||px>sw-1||py>sh-1)continue;const x0=Math.floor(px),y0=Math.floor(py),x1=Math.min(sw-1,x0+1),y1=Math.min(sh-1,y0+1),fx=px-x0,fy=py-y0;const i00=(y0*sw+x0)*4,i10=(y0*sw+x1)*4,i01=(y1*sw+x0)*4,i11=(y1*sw+x1)*4,oi=(y*W+x)*4;for(let k=0;k<4;k++){const a=S[i00+k]*(1-fx)+S[i10+k]*fx,b=S[i01+k]*(1-fx)+S[i11+k]*fx;D[oi+k]=a*(1-fy)+b*fy;}}}
+  out.putImageData(O,0,0);return c;
 }
-function beginCropDrag(e, handle){
-  const item=captureItems[captureIndex];
-  if(!item) return;
-  cropDrag={handle,startX:e.clientX,startY:e.clientY,startCrop:{...item.crop},pointerId:e.pointerId};
-  try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
-  cropBox?.classList.add("is-resizing");
-  e.preventDefault(); e.stopPropagation();
-}
-
-// Attach the 8 handles directly. This avoids event bubbling/capture glitches on mobile
-// and makes every edge/corner independently draggable.
-document.querySelectorAll(".crop-handle").forEach(handleEl=>{
-  handleEl.addEventListener("pointerdown",e=>beginCropDrag(e,handleEl.dataset.handle));
-  handleEl.addEventListener("pointermove",e=>{
-    if(cropDrag && cropDrag.pointerId===e.pointerId){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}
-  });
-  handleEl.addEventListener("pointerup",e=>{if(cropDrag && cropDrag.pointerId===e.pointerId) endCropDrag(e);});
-  handleEl.addEventListener("pointercancel",e=>{if(cropDrag && cropDrag.pointerId===e.pointerId) endCropDrag(e);});
-});
-
-// Drag the inside of the border to move the whole crop box.
-cropBox?.addEventListener("pointerdown",e=>{
-  if(e.target.closest(".crop-handle")) return;
-  beginCropDrag(e,"move");
-});
-cropBox?.addEventListener("pointermove",e=>{
-  if(cropDrag && cropDrag.pointerId===e.pointerId){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}
-});
-const endCropDrag=e=>{
-  if(cropDrag && (!e.pointerId || cropDrag.pointerId===e.pointerId)){
-    cropDrag=null; cropPending=null; cropBox?.classList.remove("is-resizing"); renderCrop();
-  }
-};
-cropBox?.addEventListener("pointerup",endCropDrag);
-cropBox?.addEventListener("pointercancel",endCropDrag);
-window.addEventListener("resize",()=>{if(activeTool==="capture") scheduleCropRender();});
 
 async function materializeCaptureFiles(){
   if(!captureItems.length) throw new Error("Capture or add at least one image first.");
@@ -1452,13 +1393,7 @@ async function materializeCaptureFiles(){
   for(let i=0;i<captureItems.length;i++){
     const item=captureItems[i];
     const img=await imageFromFile(item.file);
-    const sw=img.naturalWidth, sh=img.naturalHeight;
-    const sx=Math.max(0,Math.floor(item.crop.l*sw)), sy=Math.max(0,Math.floor(item.crop.t*sh));
-    const ex=Math.min(sw,Math.ceil(item.crop.r*sw)), ey=Math.min(sh,Math.ceil(item.crop.b*sh));
-    const cw=Math.max(1,ex-sx), ch=Math.max(1,ey-sy);
-    const c=document.createElement("canvas"); c.width=cw; c.height=ch;
-    const ctx=c.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-    ctx.drawImage(img,sx,sy,cw,ch,0,0,cw,ch);
+    const c=warpPerspective(img,item.quad||rectToQuad());
     const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error("Could not prepare captured image.")),"image/jpeg",.94));
     out.push(makeImageFile(blob,`Scan_${String(i+1).padStart(2,"0")}.jpg`));
     await new Promise(r=>setTimeout(r,0));
@@ -1475,13 +1410,7 @@ async function createCapturePdf(){
   for(let i=0;i<captureItems.length;i++){
     const item=captureItems[i];
     const img=await imageFromFile(item.file);
-    const sw=img.naturalWidth, sh=img.naturalHeight;
-    const sx=Math.max(0,Math.floor(item.crop.l*sw)), sy=Math.max(0,Math.floor(item.crop.t*sh));
-    const ex=Math.min(sw,Math.ceil(item.crop.r*sw)), ey=Math.min(sh,Math.ceil(item.crop.b*sh));
-    const cw=Math.max(1,ex-sx), ch=Math.max(1,ey-sy);
-    const c=document.createElement("canvas"); c.width=cw; c.height=ch;
-    const ctx=c.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-    ctx.drawImage(img,sx,sy,cw,ch,0,0,cw,ch);
+    const c=warpPerspective(img,item.quad||rectToQuad());
     const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error("Could not prepare image.")),"image/jpeg",quality==="small"?.72:quality==="medium"?.84:.90));
     const cropped=makeImageFile(blob,`capture-${i+1}.jpg`);
     const prepared=await prepareImage(cropped,quality,1,color);

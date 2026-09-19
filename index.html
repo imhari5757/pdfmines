@@ -157,22 +157,20 @@
               <label><input type="radio" name="captureBorderMode" value="manual"> Manual border adjustment</label>
             </div>
           </div>
-          <div id="cropViewport" class="crop-viewport">
+          <div id="cropViewport" class="crop-viewport scanner-quad-viewport">
             <img id="cropImage" alt="Document preview">
-            <div id="cropShadeTop" class="crop-shade crop-shade-top"></div>
-            <div id="cropShadeLeft" class="crop-shade crop-shade-left"></div>
-            <div id="cropShadeRight" class="crop-shade crop-shade-right"></div>
-            <div id="cropShadeBottom" class="crop-shade crop-shade-bottom"></div>
-            <div id="cropBox" class="crop-box">
-              <button class="crop-handle nw" data-handle="nw" aria-label="Adjust top left"></button>
-              <button class="crop-handle n" data-handle="n" aria-label="Adjust top"></button>
-              <button class="crop-handle ne" data-handle="ne" aria-label="Adjust top right"></button>
-              <button class="crop-handle w" data-handle="w" aria-label="Adjust left"></button>
-              <button class="crop-handle e" data-handle="e" aria-label="Adjust right"></button>
-              <button class="crop-handle sw" data-handle="sw" aria-label="Adjust bottom left"></button>
-              <button class="crop-handle s" data-handle="s" aria-label="Adjust bottom"></button>
-              <button class="crop-handle se" data-handle="se" aria-label="Adjust bottom right"></button>
-            </div>
+            <svg id="cropOverlay" class="crop-overlay" aria-label="Document border adjustment" preserveAspectRatio="none">
+              <path id="cropShadePath" class="crop-shade-path" fill-rule="evenodd"></path>
+              <polygon id="cropPolygon" class="crop-polygon"></polygon>
+              <line id="quadLineTop" class="quad-line"></line>
+              <line id="quadLineRight" class="quad-line"></line>
+              <line id="quadLineBottom" class="quad-line"></line>
+              <line id="quadLineLeft" class="quad-line"></line>
+              <circle id="quadTL" class="quad-handle" data-handle="tl" r="16" aria-label="Adjust top left"></circle>
+              <circle id="quadTR" class="quad-handle" data-handle="tr" r="16" aria-label="Adjust top right"></circle>
+              <circle id="quadBR" class="quad-handle" data-handle="br" r="16" aria-label="Adjust bottom right"></circle>
+              <circle id="quadBL" class="quad-handle" data-handle="bl" r="16" aria-label="Adjust bottom left"></circle>
+            </svg>
           </div>
           <div class="crop-controls">
             <button type="button" id="captureAutoAdjust" class="btn secondary small">✨ Auto-adjust border</button>
@@ -280,6 +278,6 @@
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="script.js?v=28"></script>
+<script src="script.js?v=29"></script>
 </body>
 </html>
