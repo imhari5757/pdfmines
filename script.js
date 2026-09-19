@@ -132,11 +132,15 @@ function render(){
     const div = document.createElement("div");
     div.className = "thumb";
     div.dataset.fileIndex = String(i);
-    div.draggable = true;
+    // Android/Touch browsers have a native drag ghost that ignores our thumbnail sizing.
+    // Disable native HTML5 dragging on coarse pointers and use our controlled PointerEvent drag.
+    const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    div.draggable = !coarsePointer;
     div.title = "Drag to reorder";
 
     const img = document.createElement("img");
     img.draggable = false;
+    img.addEventListener("dragstart", e => e.preventDefault());
     img.decoding = "async";
     img.loading = "eager";
     img.alt = `Page ${i + 1} preview`;
@@ -180,20 +184,23 @@ function render(){
     div.append(img, num, dragHint, del);
     thumbs.appendChild(div);
 
-    // Desktop / mouse drag-and-drop
+    // Never allow the browser to create its own drag ghost. Desktop uses native HTML5
+    // drag only when the pointer is fine; touch uses our controlled PointerEvent drag.
     div.addEventListener("dragstart", e => {
+      if(coarsePointer) { e.preventDefault(); return; }
+
       desktopDragIndex = i;
       div.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", String(i));
     });
 
-    div.addEventListener("dragend", () => {
+    if(!coarsePointer) div.addEventListener("dragend", () => {
       desktopDragIndex = null;
       [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
     });
 
-    div.addEventListener("dragover", e => {
+    if(!coarsePointer) div.addEventListener("dragover", e => {
       e.preventDefault();
       if (desktopDragIndex === null || desktopDragIndex === i) return;
       e.dataTransfer.dropEffect = "move";
@@ -201,9 +208,9 @@ function render(){
       div.classList.add("drag-over");
     });
 
-    div.addEventListener("dragleave", () => div.classList.remove("drag-over"));
+    if(!coarsePointer) div.addEventListener("dragleave", () => div.classList.remove("drag-over"));
 
-    div.addEventListener("drop", e => {
+    if(!coarsePointer) div.addEventListener("drop", e => {
       e.preventDefault();
       const from = desktopDragIndex;
       const to = i;
@@ -220,6 +227,7 @@ function render(){
     // browser drag/scroll errors.
     div.addEventListener("pointerdown", e => {
       if(e.pointerType!=="touch" || e.target.closest("button")) return;
+      e.preventDefault();
       touchDrag.active=false;
       touchDrag.startIndex=i;
       touchDrag.el=div;
