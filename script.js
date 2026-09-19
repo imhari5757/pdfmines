@@ -249,13 +249,50 @@ function render(){
 
 $("clearBtn").onclick = () => { files = []; input.value = ""; render(); };
 
+function getAutoQuality(targetBytes, pageCount) {
+  if (!targetBytes || !pageCount) return "high";
+
+  // Target size is for the whole PDF, so estimate the budget per page.
+  const perPage = targetBytes / pageCount;
+
+  if (perPage >= 600 * 1024) return "high";
+  if (perPage >= 180 * 1024) return "medium";
+  return "small";
+}
+
+function qualityLabel(value) {
+  return value === "high" ? "High" : value === "medium" ? "Medium" : "Small file";
+}
+
+$("targetSize").addEventListener("input", () => {
+  const raw = $("targetSize").value.trim();
+  const targetValue = raw === "" ? 0 : Number(raw);
+  const unit = $("targetUnit").value;
+  const targetBytes = targetValue > 0
+    ? targetValue * (unit === "MB" ? 1024 * 1024 : 1024)
+    : 0;
+
+  if (targetBytes > 0) {
+    const auto = getAutoQuality(targetBytes, files.length || 1);
+    $("quality").value = auto;
+    $("quality").title = `Automatically selected for the ${raw} ${unit} target`;
+  } else {
+    $("quality").value = "auto";
+    $("quality").title = "Quality will be High when no target size is set";
+  }
+});
+
+$("targetUnit").addEventListener("change", () => {
+  $("targetSize").dispatchEvent(new Event("input"));
+});
+
 $("createBtn").onclick = async () => {
   if (!files.length) return;
 
   const size = $("pageSize").value;
   const orientation = $("orientation").value;
   const fitMode = $("fitMode").value;
-  const quality = $("quality").value;
+  const selectedQuality = $("quality").value;
   const colorMode = $("colorMode").value;
   const rawTarget = $("targetSize").value.trim();
   const targetValue = rawTarget === "" ? 0 : Number(rawTarget);
@@ -263,6 +300,17 @@ $("createBtn").onclick = async () => {
   const targetSize = targetValue > 0
     ? Math.round(targetValue * (targetUnit === "MB" ? 1024 * 1024 : 1024))
     : 0;
+
+  // When a target size is supplied, automatically choose the appropriate
+  // quality tier based on the approximate per-page size budget.
+  const quality = targetSize
+    ? getAutoQuality(targetSize, files.length)
+    : (selectedQuality === "auto" ? "high" : selectedQuality);
+
+  if (targetSize) {
+    $("quality").value = quality;
+    $("quality").title = `Auto quality: ${qualityLabel(quality)}`;
+  }
   const wrap = $("progressWrap");
   const bar = $("progressBar");
   const txt = $("progressText");
@@ -271,7 +319,7 @@ $("createBtn").onclick = async () => {
   button.disabled = true;
   wrap.classList.remove("hidden");
   bar.style.width = "0%";
-  status.textContent = "● Working…";
+  status.textContent = targetSize ? `● Auto quality: ${qualityLabel(quality)}` : "● Working…";
 
   try {
     // When a target size is requested, reduce both JPEG quality AND
