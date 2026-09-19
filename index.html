@@ -40,7 +40,6 @@
       <p>JPG, JPEG, PNG or WEBP · Multiple files supported</p>
       <div class="upload-actions">
         <button class="btn primary small" id="chooseBtn">Browse gallery</button>
-        <button class="btn secondary small" id="mainCaptureBtn" type="button">📷 Capture with camera</button>
       </div>
       <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
     </div>
@@ -98,7 +97,6 @@
       <small id="toolDropHint">PDF files are processed locally in your browser.</small>
       <div class="tool-upload-actions">
         <button id="toolChoose" class="btn primary small">Browse files</button>
-        <button id="toolCapture" class="btn secondary small hidden" type="button">📷 Capture with camera</button>
       </div>
       <input id="toolInput" type="file" multiple hidden>
     </div>
@@ -121,77 +119,6 @@
       <label id="rotateAngleWrap" class="tool-option hidden">Rotation
         <select id="rotateAngle"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select>
       </label>
-      <div id="captureOptionsWrap" class="capture-options hidden">
-        <div class="capture-header">
-          <div>
-            <div class="number-options-title">Capture Images → PDF</div>
-            <div class="capture-subtitle">Use your camera or upload images. Borders are adjusted locally in your browser.</div>
-          </div>
-        </div>
-
-        <div class="capture-camera-card">
-          <video id="captureVideo" class="capture-video" autoplay playsinline muted></video>
-          <div id="captureVideoPlaceholder" class="capture-video-placeholder">Camera preview will appear here.</div>
-          <div class="capture-camera-actions">
-            <button type="button" id="captureStartCamera" class="btn secondary small">Start camera</button>
-            <button type="button" id="captureTakePhoto" class="btn primary small" disabled>Capture photo</button>
-            <button type="button" id="captureStopCamera" class="btn secondary small" disabled>Stop</button>
-          </div>
-        </div>
-
-        <div class="capture-upload-row">
-          <button type="button" id="captureUploadBtn" class="btn secondary small">＋ Add photos</button>
-          <span>JPG, PNG or WEBP</span>
-          <input id="captureUploadInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
-        </div>
-
-        <div id="captureEditorEmpty" class="capture-editor-empty">Capture or add a document to adjust its borders.</div>
-        <div id="captureEditor" class="capture-editor hidden">
-          <div class="capture-editor-top">
-            <b id="captureEditorTitle">Page 1</b>
-            <div class="capture-mode-row">
-              <label><input type="radio" name="captureBorderMode" value="auto" checked> Automatic border adjustment</label>
-              <label><input type="radio" name="captureBorderMode" value="manual"> Manual border adjustment</label>
-            </div>
-          </div>
-          <div id="cropViewport" class="crop-viewport">
-            <img id="cropImage" alt="Document preview">
-            <div id="cropShadeTop" class="crop-shade crop-shade-top"></div>
-            <div id="cropShadeLeft" class="crop-shade crop-shade-left"></div>
-            <div id="cropShadeRight" class="crop-shade crop-shade-right"></div>
-            <div id="cropShadeBottom" class="crop-shade crop-shade-bottom"></div>
-            <div id="cropBox" class="crop-box">
-              <button class="crop-handle nw" data-handle="nw" aria-label="Adjust top left"></button>
-              <button class="crop-handle n" data-handle="n" aria-label="Adjust top"></button>
-              <button class="crop-handle ne" data-handle="ne" aria-label="Adjust top right"></button>
-              <button class="crop-handle w" data-handle="w" aria-label="Adjust left"></button>
-              <button class="crop-handle e" data-handle="e" aria-label="Adjust right"></button>
-              <button class="crop-handle sw" data-handle="sw" aria-label="Adjust bottom left"></button>
-              <button class="crop-handle s" data-handle="s" aria-label="Adjust bottom"></button>
-              <button class="crop-handle se" data-handle="se" aria-label="Adjust bottom right"></button>
-            </div>
-          </div>
-          <div class="crop-controls">
-            <button type="button" id="captureAutoAdjust" class="btn secondary small">✨ Auto-adjust border</button>
-            <button type="button" id="captureResetCrop" class="btn secondary small">Reset border</button>
-            <span id="captureCropInfo">Border: automatic</span>
-          </div>
-          <div class="capture-pages" id="capturePages"></div>
-        </div>
-
-        <div id="capturePdfOptions" class="capture-pdf-options">
-          <label class="tool-option">Page size
-            <select id="capturePageSize"><option value="a4" selected>A4</option><option value="letter">Letter</option><option value="original">Original ratio</option></select>
-          </label>
-          <label class="tool-option">Quality
-            <select id="captureQuality"><option value="high" selected>High</option><option value="medium">Medium</option><option value="small">Small file</option></select>
-          </label>
-          <label class="tool-option">Colour
-            <select id="captureColor"><option value="color" selected>Colour</option><option value="bw">Black &amp; White</option></select>
-          </label>
-        </div>
-      </div>
-
       <div id="numberOptionsWrap" class="number-options hidden">
         <div class="number-options-title">Page Number options</div>
 
