@@ -5,6 +5,19 @@ const thumbs = document.getElementById("thumbs");
 const fileCount = document.getElementById("fileCount");
 const status = document.querySelector(".status-dot");
 let files = [];
+const filePreviewCache = new WeakMap();
+
+function cacheFilePreview(file){
+  if(filePreviewCache.has(file)) return filePreviewCache.get(file);
+  const promise = new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Could not read image preview."));
+    reader.readAsDataURL(file);
+  });
+  filePreviewCache.set(file,promise);
+  return promise;
+}
 
 const $ = id => document.getElementById(id);
 const mainCaptureBtn = $("mainCaptureBtn");
@@ -23,10 +36,16 @@ input.addEventListener("change", () => { addFiles([...input.files]); input.value
 }));
 drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
 
-function addFiles(newFiles){
+async function addFiles(newFiles){
   const valid = newFiles.filter(f => /^(image\/jpeg|image\/png|image\/webp)$/i.test(f.type));
-  files.push(...valid);
-  render();
+  if(!valid.length) return;
+  try{
+    await Promise.all(valid.map(cacheFilePreview));
+    files.push(...valid);
+    render();
+  }catch(err){
+    status.textContent = "● Could not load one or more images";
+  }
 }
 
 let desktopDragIndex = null;
@@ -130,7 +149,7 @@ function render(){
     const div = document.createElement("div");
     div.className = "thumb";
     div.dataset.fileIndex = String(i);
-    div.draggable = true;
+    div.draggable = window.matchMedia ? window.matchMedia("(pointer:fine)").matches : true;
     div.title = "Drag to reorder";
 
     const img = document.createElement("img");
@@ -140,22 +159,20 @@ function render(){
     img.alt = `Page ${i + 1} preview`;
     img.classList.add("preview-loading");
 
-    // Use a data URL for thumbnails instead of a blob URL. This is slightly
-    // more work once, but is much more reliable on Android Chrome and desktop
-    // when several images are added/re-rendered quickly.
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (!img.isConnected) return;
-      img.src = reader.result;
-      img.classList.remove("preview-loading");
+    // Stable cached preview: drag/reorder re-renders must never turn an existing
+    // image into a broken thumbnail on Android Chrome.
+    const setPreview = (src) => {
+      if (!img.isConnected || !src) return;
+      img.src = src;
+      img.classList.remove("preview-loading", "preview-error");
     };
-    reader.onerror = () => {
+    const cached = filePreviewCache.get(file);
+    (cached || cacheFilePreview(file)).then(setPreview).catch(() => {
       if (!img.isConnected) return;
       img.classList.remove("preview-loading");
       img.classList.add("preview-error");
       img.alt = "Preview unavailable";
-    };
-    reader.readAsDataURL(file);
+    });
 
     const num = document.createElement("span");
     num.className = "num";
