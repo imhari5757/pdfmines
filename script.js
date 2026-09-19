@@ -1383,7 +1383,7 @@ function warpPerspective(img,quad){
   const maxSide=2200,scale=Math.min(1,maxSide/Math.max(W,H));W=Math.max(1,Math.round(W*scale));H=Math.max(1,Math.round(H*scale));
   const c=document.createElement("canvas");c.width=W;c.height=H;const out=c.getContext("2d"),sd=document.createElement("canvas");sd.width=sw;sd.height=sh;const sx=sd.getContext("2d");sx.drawImage(img,0,0);const S=sx.getImageData(0,0,sw,sh).data, O=out.createImageData(W,H), D=O.data;
   const h=homographyFromDestToSource(src);
-  for(let y=0;y<H;y++){const v=y/(H-1||1);for(let x=0;x<W;x++){const u=x/(W-1||1),den=h[6]*u+h[7]*v+1,xx=(h[0]*u+h[1]*v+h[2])/den,yy=(h[3]*u+h[4]*v+h[5])/den,px=xx*(sw-1),py=yy*(sh-1);if(px<0||py<0||px>sw-1||py>sh-1)continue;const x0=Math.floor(px),y0=Math.floor(py),x1=Math.min(sw-1,x0+1),y1=Math.min(sh-1,y0+1),fx=px-x0,fy=py-y0;const i00=(y0*sw+x0)*4,i10=(y0*sw+x1)*4,i01=(y1*sw+x0)*4,i11=(y1*sw+x1)*4,oi=(y*W+x)*4;for(let k=0;k<4;k++){const a=S[i00+k]*(1-fx)+S[i10+k]*fx,b=S[i01+k]*(1-fx)+S[i11+k]*fx;D[oi+k]=a*(1-fy)+b*fy;}}}
+  for(let y=0;y<H;y++){const v=y/(H-1||1);for(let x=0;x<W;x++){const u=x/(W-1||1),den=h[6]*u+h[7]*v+1,xx=(h[0]*u+h[1]*v+h[2])/den,yy=(h[3]*u+h[4]*v+h[5])/den,px=xx,py=yy;if(px<0||py<0||px>sw-1||py>sh-1)continue;const x0=Math.floor(px),y0=Math.floor(py),x1=Math.min(sw-1,x0+1),y1=Math.min(sh-1,y0+1),fx=px-x0,fy=py-y0;const i00=(y0*sw+x0)*4,i10=(y0*sw+x1)*4,i01=(y1*sw+x0)*4,i11=(y1*sw+x1)*4,oi=(y*W+x)*4;for(let k=0;k<4;k++){const a=S[i00+k]*(1-fx)+S[i10+k]*fx,b=S[i01+k]*(1-fx)+S[i11+k]*fx;D[oi+k]=a*(1-fy)+b*fy;}}}
   out.putImageData(O,0,0);return c;
 }
 
