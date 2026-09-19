@@ -70,13 +70,113 @@
   <div class="section-head"><div><div class="eyebrow">THE TOOLBOX</div><h2>Everything you need for PDFs.</h2></div><p>Start simple. Go further when you need to.</p></div>
   <div class="tool-grid">
     <article class="tool-card active"><div class="tool-icon">🖼️</div><h3>Images → PDF</h3><p>Turn photos into a clean, ordered PDF.</p><button onclick="document.getElementById('startBtn').click()">Open tool →</button></article>
-    <article class="tool-card"><div class="tool-icon">📑</div><h3>Merge PDF</h3><p>Combine multiple PDFs into one document.</p><button class="coming">Coming next</button></article>
-    <article class="tool-card"><div class="tool-icon">🔗</div><h3>Mix & Combine</h3><p>Combine images and PDFs in one file.</p><button class="coming">Coming next</button></article>
-    <article class="tool-card"><div class="tool-icon">🗜️</div><h3>Compress PDF</h3><p>Reduce document size for sharing.</p><button class="coming">Coming next</button></article>
-    <article class="tool-card"><div class="tool-icon">✂️</div><h3>Split PDF</h3><p>Extract selected pages into new files.</p><button class="coming">Coming next</button></article>
-    <article class="tool-card"><div class="tool-icon">🔄</div><h3>Rotate Pages</h3><p>Fix orientation with a single click.</p><button class="coming">Coming next</button></article>
+    <article class="tool-card"><div class="tool-icon">📑</div><h3>Merge PDF</h3><p>Combine multiple PDFs into one document.</p><button class="tool-open" data-tool="merge">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">🔗</div><h3>Mix & Combine</h3><p>Combine images and PDFs in one file.</p><button class="tool-open" data-tool="mix">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">🗜️</div><h3>Compress PDF</h3><p>Reduce PDF structure size in your browser.</p><button class="tool-open" data-tool="compress">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">✂️</div><h3>Split PDF</h3><p>Extract selected pages into a new PDF.</p><button class="tool-open" data-tool="split">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">🔄</div><h3>Rotate Pages</h3><p>Rotate all or selected PDF pages.</p><button class="tool-open" data-tool="rotate">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">🔢</div><h3>Page Numbers</h3><p>Add clean page numbers to your PDF.</p><button class="tool-open" data-tool="number">Open tool →</button></article>
   </div>
 </section>
+
+
+<div id="toolModal" class="tool-modal hidden" aria-hidden="true">
+  <div class="tool-modal-backdrop" data-close-tool></div>
+  <div class="tool-modal-card" role="dialog" aria-modal="true" aria-labelledby="toolModalTitle">
+    <button class="tool-modal-close" id="toolModalClose" aria-label="Close">×</button>
+    <div class="eyebrow">PDFMINES TOOL</div>
+    <h2 id="toolModalTitle">PDF Tool</h2>
+    <p id="toolModalDesc">Your files stay in this browser.</p>
+
+    <div id="toolDrop" class="tool-drop">
+      <div class="upload-icon">↑</div>
+      <b id="toolDropTitle">Choose files</b>
+      <small id="toolDropHint">PDF files are processed locally in your browser.</small>
+      <button id="toolChoose" class="btn primary small">Choose files</button>
+      <input id="toolInput" type="file" multiple hidden>
+    </div>
+
+    <div id="toolFiles" class="tool-file-list"></div>
+
+    <div id="toolOptions" class="tool-options">
+      <label id="splitPagesWrap" class="tool-option hidden">Pages
+        <input id="splitPages" type="text" placeholder="e.g. 1-3,5,7-9">
+      </label>
+      <label id="rotateAngleWrap" class="tool-option hidden">Rotation
+        <select id="rotateAngle"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select>
+      </label>
+      <div id="numberOptionsWrap" class="number-options hidden">
+        <div class="number-options-title">Page Number options</div>
+
+        <div class="number-row page-mode-row">
+          <div>
+            <div class="number-label">Page mode</div>
+            <div class="radio-row">
+              <label><input type="radio" name="numberPageMode" value="single" checked> <span>Single page</span></label>
+              <label><input type="radio" name="numberPageMode" value="facing"> <span>Facing pages</span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="number-row position-margin-row">
+          <div>
+            <div class="number-label">Position:</div>
+            <div id="numberPositionGrid" class="position-grid" aria-label="Page number position">
+              <button type="button" data-pos="top-left" aria-label="Top left"></button>
+              <button type="button" data-pos="top-center" aria-label="Top center"></button>
+              <button type="button" data-pos="top-right" aria-label="Top right"></button>
+              <button type="button" data-pos="middle-left" aria-label="Middle left"></button>
+              <button type="button" data-pos="middle-center" aria-label="Middle center"></button>
+              <button type="button" data-pos="middle-right" aria-label="Middle right"></button>
+              <button type="button" data-pos="bottom-left" aria-label="Bottom left"></button>
+              <button type="button" data-pos="bottom-center" aria-label="Bottom center"></button>
+              <button type="button" data-pos="bottom-right" aria-label="Bottom right"></button>
+            </div>
+          </div>
+          <label class="tool-option compact-option">Margin:
+            <select id="numberMargin"><option value="recommended" selected>Recommended</option><option value="10">10 mm</option><option value="15">15 mm</option><option value="20">20 mm</option><option value="25">25 mm</option></select>
+          </label>
+        </div>
+
+        <div class="number-row">
+          <label class="tool-option">First number:
+            <input id="numberStart" type="number" min="1" step="1" value="1">
+          </label>
+        </div>
+
+        <div class="number-row two-select-row">
+          <label class="tool-option">Which pages do you want to number?
+            <select id="numberFrom"><option value="1">All pages from the beginning</option></select>
+          </label>
+          <label class="tool-option page-to-label">&nbsp;
+            <select id="numberTo"><option value="end">All pages to the end</option></select>
+          </label>
+        </div>
+
+        <div class="number-row">
+          <label class="tool-option">Text:
+            <select id="numberFormat"><option value="number">Insert only page number (recommended)</option><option value="page">Insert “Page 1”</option><option value="of">Insert “Page 1 of 10”</option><option value="slash">Insert “1 / 10”</option></select>
+          </label>
+        </div>
+
+        <div class="number-row">
+          <div class="number-label">Text format:</div>
+          <div class="text-format-bar">
+            <select id="numberFontFamily" aria-label="Font"><option value="helvetica" selected>Arial</option><option value="times">Times New Roman</option><option value="courier">Courier New</option></select>
+            <select id="numberFontSize" aria-label="Font size"><option value="9">9</option><option value="11" selected>11</option><option value="14">14</option><option value="18">18</option></select>
+            <button type="button" id="numberBold" aria-label="Bold"><b>B</b></button>
+            <button type="button" id="numberItalic" aria-label="Italic"><i>I</i></button>
+            <button type="button" id="numberUnderline" aria-label="Underline"><u>U</u></button>
+            <label class="color-control" title="Text color"><span>A</span><input id="numberColor" type="color" value="#333333" aria-label="Text color"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="toolRun" class="btn primary create">Run tool <span>→</span></button>
+    <div id="toolStatus" class="tool-status"></div>
+  </div>
+</div>
 
 <section id="privacy" class="privacy">
   <div class="privacy-card"><div class="shield">🛡️</div><div><div class="eyebrow">PRIVACY FIRST</div><h2>Documents stay on your device.</h2><p>PDFMines is designed so the image-to-PDF conversion happens inside your browser. This version does not upload your selected images to a PDFMines server.</p></div></div>
@@ -85,6 +185,7 @@
 
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
-<script src="script.js?v=19"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="script.js?v=22"></script>
 </body>
 </html>

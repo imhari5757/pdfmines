@@ -120,9 +120,6 @@ function finishTouchDrag(){
 function render(){
   fileArea.classList.toggle("hidden", files.length === 0);
   fileCount.textContent = `${files.length} page${files.length === 1 ? "" : "s"}`;
-  thumbs.querySelectorAll("img").forEach(img=>{
-    if(img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
-  });
   thumbs.innerHTML = "";
 
   files.forEach((file, i) => {
@@ -133,24 +130,28 @@ function render(){
     div.title = "Drag to reorder";
 
     const img = document.createElement("img");
-    const previewUrl = URL.createObjectURL(file);
-    img.src = previewUrl;
     img.draggable = false;
     img.decoding = "async";
     img.loading = "eager";
-    img.onerror = async () => {
-      // Android browsers can occasionally fail to paint a blob URL even
-      // though the file itself is valid. Fall back to a data URL so the
-      // thumbnail is always visible before PDF creation.
-      try {
-        const reader = new FileReader();
-        reader.onload = () => {
-          img.src = reader.result;
-          URL.revokeObjectURL(previewUrl);
-        };
-        reader.readAsDataURL(file);
-      } catch (_) {}
+    img.alt = `Page ${i + 1} preview`;
+    img.classList.add("preview-loading");
+
+    // Use a data URL for thumbnails instead of a blob URL. This is slightly
+    // more work once, but is much more reliable on Android Chrome and desktop
+    // when several images are added/re-rendered quickly.
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!img.isConnected) return;
+      img.src = reader.result;
+      img.classList.remove("preview-loading");
     };
+    reader.onerror = () => {
+      if (!img.isConnected) return;
+      img.classList.remove("preview-loading");
+      img.classList.add("preview-error");
+      img.alt = "Preview unavailable";
+    };
+    reader.readAsDataURL(file);
 
     const num = document.createElement("span");
     num.className = "num";
@@ -681,3 +682,398 @@ function downloadBytes(bytes, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+
+/* =========================
+   PDFMines toolbox
+   Advanced PDF tools use pdf-lib in-browser.
+   ========================= */
+const toolModal = $("toolModal");
+const toolInput = $("toolInput");
+const toolDrop = $("toolDrop");
+const toolChoose = $("toolChoose");
+const toolFilesEl = $("toolFiles");
+const toolRun = $("toolRun");
+const toolStatus = $("toolStatus");
+const toolTitle = $("toolModalTitle");
+const toolDesc = $("toolModalDesc");
+const toolDropTitle = $("toolDropTitle");
+const toolDropHint = $("toolDropHint");
+const splitPagesWrap = $("splitPagesWrap");
+const rotateAngleWrap = $("rotateAngleWrap");
+const numberOptionsWrap = $("numberOptionsWrap");
+const numberPositionGrid = $("numberPositionGrid");
+let activeTool = null;
+
+function setNumberPosition(pos){
+  numberPositionGrid?.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.pos===pos));
+}
+
+function setupNumberPageSelectors(){
+  const from=$("numberFrom"), to=$("numberTo");
+  if(!from || !to) return;
+  const count=toolFiles[0]?.__pdfPageCount || null;
+  from.innerHTML="<option value=\"1\">All pages from the beginning</option>";
+  to.innerHTML="<option value=\"end\">All pages to the end</option>";
+  if(count){
+    for(let i=1;i<=count;i++){
+      const a=document.createElement("option"); a.value=String(i); a.textContent=`From page ${i}`; from.append(a);
+      const b=document.createElement("option"); b.value=String(i); b.textContent=`To page ${i}`; to.append(b);
+    }
+  }
+}
+
+let toolFiles = [];
+
+const TOOL_CONFIG = {
+  merge: {
+    title:"Merge PDF",
+    desc:"Combine multiple PDF files into one document. Everything stays in this browser.",
+    accept:"application/pdf",
+    multiple:true,
+    action:"Merge PDFs"
+  },
+  mix: {
+    title:"Mix & Combine",
+    desc:"Combine PDF and image files into one PDF in the order you choose.",
+    accept:"application/pdf,image/jpeg,image/png,image/webp",
+    multiple:true,
+    action:"Create combined PDF"
+  },
+  compress: {
+    title:"Compress PDF",
+    desc:"Re-save the PDF with compressed object streams. Image-heavy PDFs may not shrink much without rasterization.",
+    accept:"application/pdf",
+    multiple:false,
+    action:"Optimize PDF"
+  },
+  split: {
+    title:"Split PDF",
+    desc:"Extract selected pages into a new PDF. Example: 1-3,5,7-9.",
+    accept:"application/pdf",
+    multiple:false,
+    action:"Split PDF"
+  },
+  rotate: {
+    title:"Rotate Pages",
+    desc:"Rotate all pages of a PDF in your browser.",
+    accept:"application/pdf",
+    multiple:false,
+    action:"Rotate PDF"
+  },
+  number: {
+    title:"Page Numbers",
+    desc:"Add page numbers to your PDF in your browser. Choose the format, position and starting number.",
+    accept:"application/pdf",
+    multiple:false,
+    action:"Add Page Numbers"
+  }
+};
+
+function openTool(name){
+  const cfg=TOOL_CONFIG[name];
+  if(!cfg) return;
+  activeTool=name;
+  toolFiles=[];
+  toolInput.value="";
+  toolInput.accept=cfg.accept;
+  toolInput.multiple=cfg.multiple;
+  toolTitle.textContent=cfg.title;
+  toolDesc.textContent=cfg.desc;
+  toolDropTitle.textContent=cfg.multiple ? "Choose files" : "Choose a file";
+  toolDropHint.textContent=name==="mix"
+    ? "PDF + JPG/PNG/WEBP supported."
+    : "Files are processed locally in your browser.";
+  toolRun.textContent="";
+  toolRun.append(cfg.action," →");
+  toolStatus.textContent="";
+  splitPagesWrap.classList.toggle("hidden",name!=="split");
+  rotateAngleWrap.classList.toggle("hidden",name!=="rotate");
+  numberOptionsWrap.classList.toggle("hidden",name!=="number");
+  if(name==="number") {
+    setNumberPosition("bottom-center");
+    setupNumberPageSelectors();
+    document.querySelectorAll('input[name="numberPageMode"]').forEach(r=>r.checked=(r.value==="single"));
+    $("numberBold")?.classList.remove("active");
+    $("numberItalic")?.classList.remove("active");
+    $("numberUnderline")?.classList.remove("active");
+  }
+  renderToolFiles();
+  toolModal.classList.remove("hidden");
+  toolModal.setAttribute("aria-hidden","false");
+  document.body.classList.add("modal-open");
+}
+
+function closeTool(){
+  toolModal.classList.add("hidden");
+  toolModal.setAttribute("aria-hidden","true");
+  document.body.classList.remove("modal-open");
+  activeTool=null;
+  toolFiles=[];
+  toolInput.value="";
+}
+
+document.querySelectorAll(".tool-open").forEach(btn=>{
+  btn.addEventListener("click",()=>openTool(btn.dataset.tool));
+});
+$("toolModalClose").onclick=closeTool;
+document.querySelectorAll("[data-close-tool]").forEach(el=>el.onclick=closeTool);
+toolChoose.onclick=e=>{e.stopPropagation();toolInput.click();};
+toolDrop.addEventListener("click",e=>{
+  if(!e.target.closest("button")) toolInput.click();
+});
+toolInput.addEventListener("change",async()=>{
+  const chosen=[...toolInput.files];
+  if(activeTool==="mix"){
+    toolFiles.push(...chosen.filter(f=>/^(application\/pdf|image\/jpeg|image\/png|image\/webp)$/i.test(f.type)));
+  }else{
+    toolFiles=chosen.slice(0, activeTool==="merge" ? 50 : 1);
+  }
+  toolInput.value="";
+  renderToolFiles();
+  if(activeTool==="number" && toolFiles[0]){
+    try{
+      toolFiles[0].__pdfPageCount=await getPdfPageCount(toolFiles[0]);
+    }catch(e){}
+    setupNumberPageSelectors();
+  }
+});
+
+function renderToolFiles(){
+  toolFilesEl.innerHTML="";
+  toolFiles.forEach((f,i)=>{
+    const row=document.createElement("div");
+    row.className="tool-file";
+    row.innerHTML=`<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
+    row.querySelector(".tool-file-name").textContent=f.name;
+    row.querySelector("button").onclick=()=>{
+      toolFiles.splice(i,1); renderToolFiles();
+    };
+    toolFilesEl.append(row);
+  });
+}
+
+function ensurePDFLib(){
+  if(!window.PDFLib) throw new Error("PDF engine could not load. Please reload the page.");
+  return window.PDFLib;
+}
+
+async function readBytes(file){
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+function downloadToolBytes(bytes,name){
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+async function imageFileToPdfBytes(file){
+  // Use the existing image-to-PDF engine for a single image so quality and
+  // browser-side processing remain consistent with Images -> PDF.
+  const data=await readImage(file,"high");
+  const img=await decodeImage(data);
+  const pageW=210, pageH=297, mm=n=>n*72/25.4;
+  const margin=mm(8), pw=mm(pageW), ph=mm(pageH);
+  const scale=Math.min((pw-margin*2)/img.width,(ph-margin*2)/img.height);
+  const w=img.width*scale,h=img.height*scale;
+  const page={data,width:img.width,height:img.height,pageWmm:pageW,pageHmm:pageH};
+  return buildImagePdf([page]);
+}
+
+async function mergePdfFiles(pdfFiles){
+  const {PDFDocument}=ensurePDFLib();
+  const out=await PDFDocument.create();
+  for(const file of pdfFiles){
+    const src=await PDFDocument.load(await readBytes(file),{ignoreEncryption:false});
+    const pages=await out.copyPages(src,src.getPageIndices());
+    pages.forEach(p=>out.addPage(p));
+  }
+  return await out.save({useObjectStreams:true});
+}
+
+async function mixFiles(items){
+  const {PDFDocument}=ensurePDFLib();
+  const out=await PDFDocument.create();
+
+  for(const file of items){
+    if(file.type==="application/pdf"){
+      const src=await PDFDocument.load(await readBytes(file));
+      const pages=await out.copyPages(src,src.getPageIndices());
+      pages.forEach(p=>out.addPage(p));
+    }else{
+      const data=await readImage(file,"high");
+      const img=new Image();
+      await new Promise((resolve,reject)=>{
+        img.onload=resolve;img.onerror=reject;img.src=data;
+      });
+      const page=out.addPage([595.276,841.89]);
+      const jpg=await out.embedJpg(data);
+      const scale=Math.min(555.276/img.width,801.89/img.height);
+      const w=img.width*scale,h=img.height*scale;
+      page.drawImage(jpg,{x:(595.276-w)/2,y:(841.89-h)/2,width:w,height:h});
+    }
+  }
+  return await out.save({useObjectStreams:true});
+}
+
+async function optimizePdf(file){
+  const {PDFDocument}=ensurePDFLib();
+  const doc=await PDFDocument.load(await readBytes(file));
+  return await doc.save({useObjectStreams:true,addDefaultPage:false,updateFieldAppearances:false});
+}
+
+function parsePageSelection(text,count){
+  const set=new Set();
+  for(const part of text.split(",")){
+    const t=part.trim();
+    if(!t) continue;
+    if(/^\d+$/.test(t)){
+      const n=Number(t);
+      if(n<1||n>count) throw new Error(`Page ${n} is outside the PDF.`);
+      set.add(n-1);
+    }else if(/^(\d+)\s*-\s*(\d+)$/.test(t)){
+      const [,a,b]=t.match(/^(\d+)\s*-\s*(\d+)$/).map(Number);
+      if(a<1||b<a||b>count) throw new Error("Invalid page range.");
+      for(let n=a;n<=b;n++) set.add(n-1);
+    }else throw new Error(`Invalid page selection: ${t}`);
+  }
+  return [...set].sort((a,b)=>a-b);
+}
+
+async function splitPdf(file){
+  const {PDFDocument}=ensurePDFLib();
+  const src=await PDFDocument.load(await readBytes(file));
+  const text=$("splitPages").value.trim();
+  const indices=text ? parsePageSelection(text,src.getPageCount()) : src.getPageIndices();
+  if(!indices.length) throw new Error("Select at least one page.");
+  const out=await PDFDocument.create();
+  const pages=await out.copyPages(src,indices);
+  pages.forEach(p=>out.addPage(p));
+  return await out.save({useObjectStreams:true});
+}
+
+async function rotatePdf(file){
+  const {PDFDocument,degrees}=ensurePDFLib();
+  const doc=await PDFDocument.load(await readBytes(file));
+  const angle=Number($("rotateAngle").value);
+  doc.getPages().forEach(page=>{
+    page.setRotation(degrees(angle));
+  });
+  return await doc.save({useObjectStreams:true});
+}
+
+numberPositionGrid?.addEventListener("click",e=>{
+  const b=e.target.closest("button[data-pos]");
+  if(b) setNumberPosition(b.dataset.pos);
+});
+["numberBold","numberItalic","numberUnderline"].forEach(id=>{
+  $(id)?.addEventListener("click",()=>$(id).classList.toggle("active"));
+});
+
+async function getPdfPageCount(file){
+  const {PDFDocument}=ensurePDFLib();
+  const doc=await PDFDocument.load(await readBytes(file));
+  return doc.getPageCount();
+}
+
+async function numberPdf(file){
+  const {PDFDocument,StandardFonts,rgb}=ensurePDFLib();
+  const doc=await PDFDocument.load(await readBytes(file));
+  const pages=doc.getPages();
+  const format=$("numberFormat").value;
+  const position=(numberPositionGrid?.querySelector("button.active")?.dataset.pos)||"bottom-center";
+  const start=Math.max(1,Number($("numberStart").value)||1);
+  const marginValue=$("numberMargin")?.value || "recommended";
+  const marginMm=marginValue==="recommended" ? 8 : Number(marginValue);
+  const margin=marginMm*72/25.4;
+  const pageMode=document.querySelector('input[name="numberPageMode"]:checked')?.value || "single";
+  const fromVal=$("numberFrom")?.value || "1";
+  const toVal=$("numberTo")?.value || "end";
+  const from=Math.max(1,Number(fromVal)||1)-1;
+  const to=toVal==="end" ? pages.length-1 : Math.min(pages.length-1,Math.max(from,Number(toVal)-1));
+  const size=Math.max(6,Number($("numberFontSize").value)||11);
+  const family=$("numberFontFamily")?.value || "helvetica";
+  const bold=$("numberBold")?.classList.contains("active");
+  const italic=$("numberItalic")?.classList.contains("active");
+  const underline=$("numberUnderline")?.classList.contains("active");
+  const hex=$("numberColor")?.value || "#333333";
+  const rr=parseInt(hex.slice(1,3),16)/255, gg=parseInt(hex.slice(3,5),16)/255, bb=parseInt(hex.slice(5,7),16)/255;
+
+  let fontName=StandardFonts.Helvetica;
+  if(family==="times") fontName=bold ? StandardFonts.TimesRomanBold : italic ? StandardFonts.TimesRomanItalic : StandardFonts.TimesRoman;
+  else if(family==="courier") fontName=bold ? StandardFonts.CourierBold : italic ? StandardFonts.CourierOblique : StandardFonts.Courier;
+  else if(bold) fontName=StandardFonts.HelveticaBold;
+  else if(italic) fontName=StandardFonts.HelveticaOblique;
+  const font=await doc.embedFont(fontName);
+  const totalNumbered=Math.max(0,to-from+1);
+
+  for(let index=from;index<=to;index++){
+    const page=pages[index];
+    let n=start+(index-from);
+    let label=String(n);
+    if(format==="page") label=`Page ${n}`;
+    else if(format==="of") label=`Page ${n} of ${start+totalNumbered-1}`;
+    else if(format==="slash") label=`${n} / ${start+totalNumbered-1}`;
+
+    const textWidth=font.widthOfTextAtSize(label,size);
+    const w=page.getWidth(), h=page.getHeight();
+    let pos=position;
+    if(pageMode==="facing"){
+      const relative=index-from;
+      if(position.endsWith("center")) pos=position;
+      else {
+        const leftSide=relative%2===0;
+        if(position.endsWith("left") || position.endsWith("right")) pos=leftSide ? "bottom-left" : "bottom-right";
+      }
+    }
+    const vertical=pos.startsWith("top") ? "top" : pos.startsWith("middle") ? "middle" : "bottom";
+    const side=pos.endsWith("left") ? "left" : pos.endsWith("right") ? "right" : "center";
+    const x=side==="left" ? margin : side==="right" ? w-margin-textWidth : (w-textWidth)/2;
+    const y=vertical==="top" ? h-margin-size : vertical==="middle" ? (h-size)/2 : margin;
+    page.drawText(label,{x,y,size,font,color:rgb(rr,gg,bb)});
+    if(underline) page.drawLine({start:{x,y:y-2},end:{x:x+textWidth,y:y-2},thickness:Math.max(0.6,size/14),color:rgb(rr,gg,bb)});
+  }
+  return await doc.save({useObjectStreams:true});
+}
+
+toolRun.onclick=async()=>{
+  if(!activeTool) return;
+  if(!toolFiles.length){
+    toolStatus.textContent="Please choose a file first.";
+    return;
+  }
+  if(activeTool==="merge" && toolFiles.length<2){
+    toolStatus.textContent="Choose at least 2 PDF files.";
+    return;
+  }
+
+  toolRun.disabled=true;
+  toolStatus.textContent="Processing locally…";
+  try{
+    let bytes;
+    if(activeTool==="merge") bytes=await mergePdfFiles(toolFiles);
+    else if(activeTool==="mix") bytes=await mixFiles(toolFiles);
+    else if(activeTool==="compress") bytes=await optimizePdf(toolFiles[0]);
+    else if(activeTool==="split") bytes=await splitPdf(toolFiles[0]);
+    else if(activeTool==="rotate") bytes=await rotatePdf(toolFiles[0]);
+    else if(activeTool==="number") bytes=await numberPdf(toolFiles[0]);
+
+    const base=activeTool==="merge"?"PDFMines_Merged":
+      activeTool==="mix"?"PDFMines_Combined":
+      activeTool==="compress"?"PDFMines_Optimized":
+      activeTool==="split"?"PDFMines_Split":
+      activeTool==="rotate"?"PDFMines_Rotated":
+      "PDFMines_Numbered";
+    downloadToolBytes(bytes,`${base}_${new Date().toISOString().slice(0,10)}.pdf`);
+    const kb=Math.round(bytes.length/1024);
+    toolStatus.textContent=`Done ✓  ${kb} KB — downloaded to your device.`;
+  }catch(err){
+    console.error(err);
+    toolStatus.textContent=err?.message || "Could not process this PDF.";
+  }finally{
+    toolRun.disabled=false;
+  }
+};
