@@ -238,14 +238,12 @@ function buildImagePdf(pages) {
 
     const pageW = mmToPt(page.pageWmm);
     const pageH = mmToPt(page.pageHmm);
-    const margin = mmToPt(5);
-    const maxW = Math.max(1, pageW - margin * 2);
-    const maxH = Math.max(1, pageH - margin * 2);
-    const scale = Math.min(maxW / page.width, maxH / page.height);
-    const drawW = page.width * scale;
-    const drawH = page.height * scale;
-    const x = (pageW - drawW) / 2;
-    const y = (pageH - drawH) / 2;
+    // Full-page mode: 0 mm margin and intentional stretching.
+    const margin = 0;
+    const drawW = pageW;
+    const drawH = pageH;
+    const x = 0;
+    const y = 0;
 
     const content = `q\n${fmt(drawW)} 0 0 ${fmt(drawH)} ${fmt(x)} ${fmt(y)} cm\n/Im1 Do\nQ\n`;
 
