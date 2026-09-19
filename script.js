@@ -27,6 +27,32 @@ function addFiles(newFiles){
   render();
 }
 
+let desktopDragIndex = null;
+let touchDragEl = null;
+let touchDragActive = false;
+
+function reorderFiles(fromIndex, toIndex){
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= files.length || toIndex >= files.length) return;
+  const moved = files.splice(fromIndex, 1)[0];
+  files.splice(toIndex, 0, moved);
+}
+
+function commitTouchOrder(){
+  if (!touchDragActive) return;
+  const order = [...thumbs.querySelectorAll(".thumb")]
+    .map(el => Number(el.dataset.fileIndex))
+    .filter(Number.isInteger);
+
+  if (order.length === files.length) {
+    const reordered = order.map(i => files[i]);
+    files = reordered;
+  }
+  touchDragEl = null;
+  touchDragActive = false;
+  [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
+  render();
+}
+
 function render(){
   fileArea.classList.toggle("hidden", files.length === 0);
   fileCount.textContent = `${files.length} page${files.length === 1 ? "" : "s"}`;
@@ -35,19 +61,110 @@ function render(){
   files.forEach((file, i) => {
     const div = document.createElement("div");
     div.className = "thumb";
+    div.dataset.fileIndex = String(i);
+    div.draggable = true;
+    div.title = "Drag to reorder";
+
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
+    img.draggable = false;
     img.onload = () => URL.revokeObjectURL(img.src);
+
     const num = document.createElement("span");
     num.className = "num";
     num.textContent = String(i + 1).padStart(2, "0");
+
+    const dragHint = document.createElement("span");
+    dragHint.className = "drag-hint";
+    dragHint.textContent = "⋮⋮";
+    dragHint.title = "Drag to reorder";
+
     const del = document.createElement("button");
     del.textContent = "×";
     del.title = "Remove";
-    del.onclick = () => { files.splice(i, 1); render(); };
-    div.append(img, num, del);
+    del.onclick = e => {
+      e.stopPropagation();
+      files.splice(i, 1);
+      render();
+    };
+
+    div.append(img, num, dragHint, del);
     thumbs.appendChild(div);
+
+    // Desktop / mouse drag-and-drop
+    div.addEventListener("dragstart", e => {
+      desktopDragIndex = i;
+      div.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(i));
+    });
+
+    div.addEventListener("dragend", () => {
+      desktopDragIndex = null;
+      [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
+    });
+
+    div.addEventListener("dragover", e => {
+      e.preventDefault();
+      if (desktopDragIndex === null || desktopDragIndex === i) return;
+      e.dataTransfer.dropEffect = "move";
+      [...thumbs.children].forEach(el => el.classList.remove("drag-over"));
+      div.classList.add("drag-over");
+    });
+
+    div.addEventListener("dragleave", () => div.classList.remove("drag-over"));
+
+    div.addEventListener("drop", e => {
+      e.preventDefault();
+      const from = desktopDragIndex;
+      const to = i;
+      [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
+      desktopDragIndex = null;
+      if (from !== null && from !== to) {
+        reorderFiles(from, to);
+        render();
+      }
+    });
+
+    // Touch / mobile drag. The thumbnail can be dragged left/right without
+    // needing a separate reorder button.
+    div.addEventListener("pointerdown", e => {
+      if (e.pointerType !== "touch" || e.target.closest("button")) return;
+      touchDragEl = div;
+      touchDragActive = false;
+    });
+
+    div.addEventListener("pointermove", e => {
+      if (e.pointerType !== "touch" || touchDragEl !== div) return;
+
+      if (!touchDragActive) {
+        touchDragActive = true;
+        div.classList.add("dragging");
+        try { div.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      e.preventDefault();
+      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".thumb");
+      if (!target || target === div || target.parentElement !== thumbs) return;
+
+      [...thumbs.children].forEach(el => el.classList.remove("drag-over"));
+      target.classList.add("drag-over");
+
+      const rect = target.getBoundingClientRect();
+      const before = e.clientX < rect.left + rect.width / 2;
+      if (before) thumbs.insertBefore(div, target);
+      else thumbs.insertBefore(div, target.nextSibling);
+    });
+
+    div.addEventListener("pointerup", e => {
+      if (e.pointerType === "touch" && touchDragEl === div) commitTouchOrder();
+    });
+
+    div.addEventListener("pointercancel", e => {
+      if (e.pointerType === "touch" && touchDragEl === div) commitTouchOrder();
+    });
   });
+
   status.textContent = "● Ready";
 }
 

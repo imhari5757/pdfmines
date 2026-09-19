@@ -23,3 +23,16 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
 .settings .size-input{display:flex;gap:7px;margin-top:5px;width:100%}
 .settings .size-input input{margin-top:0!important;box-sizing:border-box;min-width:75px;width:100px;flex:1 1 auto;height:38px;padding:9px 11px;font-size:13px}
 .settings .size-input select{margin-top:0!important;box-sizing:border-box;width:72px!important;min-width:72px;height:38px;padding:8px 7px;font-size:12px}
+
+/* Desktop: give Target PDF size a comfortable two-column area. */
+@media(min-width:851px){
+  .settings label:last-child{grid-column:span 2;}
+}
+
+/* Reorderable thumbnails */
+.thumb{cursor:grab;touch-action:none;transition:transform .12s,opacity .12s,box-shadow .12s,border-color .12s}
+.thumb:active{cursor:grabbing}
+.thumb.dragging{opacity:.55;transform:scale(.97)}
+.thumb.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px #5b5bf711}
+.drag-hint{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);background:#fff;border-radius:7px;padding:1px 6px;font-size:10px;font-weight:900;letter-spacing:1px;opacity:.88;box-shadow:0 2px 8px #0001;pointer-events:none}
+.thumb img{user-select:none;-webkit-user-drag:none}
