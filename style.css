@@ -18,3 +18,8 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
 .size-input{display:flex;gap:5px;margin-top:5px}
 .size-input input{margin-top:0!important;min-width:0;flex:1}
 .size-input select{margin-top:0!important;width:68px!important;flex:0 0 68px}
+
+/* Target PDF size: give the manual field comfortable room to display the entered value. */
+.settings .size-input{display:flex;gap:7px;margin-top:5px;width:100%}
+.settings .size-input input{margin-top:0!important;box-sizing:border-box;min-width:75px;width:100px;flex:1 1 auto;height:38px;padding:9px 11px;font-size:13px}
+.settings .size-input select{margin-top:0!important;box-sizing:border-box;width:72px!important;min-width:72px;height:38px;padding:8px 7px;font-size:12px}

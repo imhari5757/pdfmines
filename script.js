@@ -61,7 +61,8 @@ $("createBtn").onclick = async () => {
   const fitMode = $("fitMode").value;
   const quality = $("quality").value;
   const colorMode = $("colorMode").value;
-  const targetValue = Number($("targetSize").value || 0);
+  const rawTarget = $("targetSize").value.trim();
+  const targetValue = rawTarget === "" ? 0 : Number(rawTarget);
   const targetUnit = $("targetUnit").value;
   const targetSize = targetValue > 0
     ? Math.round(targetValue * (targetUnit === "MB" ? 1024 * 1024 : 1024))
