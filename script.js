@@ -129,10 +129,42 @@ async function prepareImage(file, quality) {
   const max = quality === "small" ? 1600 : quality === "medium" ? 2400 : 3000;
   const jpegQuality = quality === "small" ? 0.72 : quality === "medium" ? 0.84 : 0.90;
 
-  const img = await loadImage(file);
-  const sourceW = img.naturalWidth || img.width;
-  const sourceH = img.naturalHeight || img.height;
-  if (!sourceW || !sourceH) throw new Error("Image has invalid dimensions");
+  // Prefer createImageBitmap on modern mobile browsers. It is more reliable
+  // for camera/gallery images and avoids the object-URL decoding issue seen
+  // on some Android Chrome builds.
+  let source = null;
+  let sourceW = 0;
+  let sourceH = 0;
+  let shouldClose = false;
+
+  try {
+    if ("createImageBitmap" in window) {
+      try {
+        source = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (_) {
+        // Some browsers reject the options object; try the simple form.
+        source = await createImageBitmap(file);
+      }
+      sourceW = source.width;
+      sourceH = source.height;
+      shouldClose = true;
+    }
+  } catch (_) {
+    source = null;
+  }
+
+  // Reliable fallback: read the actual file bytes into a data URL.
+  if (!source) {
+    const dataUrl = await fileToDataURL(file);
+    source = await loadImageFromDataURL(dataUrl);
+    sourceW = source.naturalWidth || source.width;
+    sourceH = source.naturalHeight || source.height;
+  }
+
+  if (!sourceW || !sourceH) {
+    if (shouldClose && source.close) source.close();
+    throw new Error("Could not read the image dimensions");
+  }
 
   const scale = Math.min(1, max / Math.max(sourceW, sourceH));
   const width = Math.max(1, Math.round(sourceW * scale));
@@ -142,35 +174,43 @@ async function prepareImage(file, quality) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d", { alpha: false });
-  if (!ctx) throw new Error("Your browser could not create an image canvas");
+  if (!ctx) {
+    if (shouldClose && source.close) source.close();
+    throw new Error("Your browser could not create an image canvas");
+  }
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, width, height);
+  ctx.drawImage(source, 0, 0, width, height);
+
+  if (shouldClose && source.close) source.close();
 
   const blob = await canvasToBlob(canvas, "image/jpeg", jpegQuality);
   const jpeg = new Uint8Array(await blob.arrayBuffer());
 
-  // Release canvas memory as soon as the JPEG bytes are created.
   canvas.width = 1;
   canvas.height = 1;
-  if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
 
   return { jpeg, width, height };
 }
 
-function loadImage(file) {
+function fileToDataURL(file) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the selected image file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromDataURL(dataUrl) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Could not decode this image"));
-    };
-    img.src = url;
+    img.onerror = () => reject(new Error("Could not decode this image. Please use JPG, PNG or WEBP."));
+    img.src = dataUrl;
   });
 }
 
