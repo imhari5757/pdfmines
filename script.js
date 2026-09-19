@@ -48,8 +48,10 @@ function makeTouchGhost(el,x,y){
   const ghost=el.cloneNode(true);
   ghost.classList.add("touch-drag-ghost");
   ghost.classList.remove("dragging","drag-over");
-  ghost.style.width=`${r.width}px`;
-  ghost.style.height=`${r.height}px`;
+  ghost.style.setProperty("width", `${r.width}px`, "important");
+  ghost.style.setProperty("height", `${r.height}px`, "important");
+  ghost.style.maxWidth = `${r.width}px`;
+  ghost.style.maxHeight = `${r.height}px`;
   ghost.style.left=`${x-r.width/2}px`;
   ghost.style.top=`${y-r.height/2}px`;
   document.body.appendChild(ghost);
@@ -1184,11 +1186,21 @@ async function fileToDataUrlSafe(file){
 }
 
 function clampCrop(c){
-  const min=0.025;
+  // Keep the border elastic: each of the 8 handles can move independently.
+  // Only a very small safety minimum prevents the box from collapsing.
+  const min=0.006;
   let l=Math.max(0,Math.min(1,c.l)), t=Math.max(0,Math.min(1,c.t));
   let r=Math.max(0,Math.min(1,c.r)), b=Math.max(0,Math.min(1,c.b));
-  if(r-l<min){ if(l+min<=1) r=l+min; else l=r-min; }
-  if(b-t<min){ if(t+min<=1) b=t+min; else t=b-min; }
+  if(r<l) [l,r]=[r,l];
+  if(b<t) [t,b]=[b,t];
+  if(r-l<min){
+    const mid=(l+r)/2; l=Math.max(0,mid-min/2); r=Math.min(1,l+min);
+    if(r-l<min){r=Math.min(1,l+min);l=Math.max(0,r-min);}
+  }
+  if(b-t<min){
+    const mid=(t+b)/2; t=Math.max(0,mid-min/2); b=Math.min(1,t+min);
+    if(b-t<min){b=Math.min(1,t+min);t=Math.max(0,b-min);}
+  }
   return {l,t,r,b};
 }
 
@@ -1357,16 +1369,41 @@ function updateCropFromPointer(clientX,clientY){
   scheduleCropRender();
 }
 
-cropBox?.addEventListener("pointerdown",e=>{
-  if(!captureItems[captureIndex]) return;
-  const handle=e.target.closest(".crop-handle")?.dataset.handle || "move";
-  cropDrag={handle,startX:e.clientX,startY:e.clientY,startCrop:{...captureItems[captureIndex].crop}};
-  cropBox.setPointerCapture?.(e.pointerId);
+function beginCropDrag(e, handle){
+  const item=captureItems[captureIndex];
+  if(!item) return;
+  cropDrag={handle,startX:e.clientX,startY:e.clientY,startCrop:{...item.crop},pointerId:e.pointerId};
+  try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}
+  cropBox?.classList.add("is-resizing");
   e.preventDefault(); e.stopPropagation();
+}
+
+// Attach the 8 handles directly. This avoids event bubbling/capture glitches on mobile
+// and makes every edge/corner independently draggable.
+document.querySelectorAll(".crop-handle").forEach(handleEl=>{
+  handleEl.addEventListener("pointerdown",e=>beginCropDrag(e,handleEl.dataset.handle));
+  handleEl.addEventListener("pointermove",e=>{
+    if(cropDrag && cropDrag.pointerId===e.pointerId){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}
+  });
+  handleEl.addEventListener("pointerup",e=>{if(cropDrag && cropDrag.pointerId===e.pointerId) endCropDrag(e);});
+  handleEl.addEventListener("pointercancel",e=>{if(cropDrag && cropDrag.pointerId===e.pointerId) endCropDrag(e);});
 });
-cropBox?.addEventListener("pointermove",e=>{if(cropDrag){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}});
-const endCropDrag=e=>{if(cropDrag){cropDrag=null;cropPending=null;renderCrop();}};
-cropBox?.addEventListener("pointerup",endCropDrag); cropBox?.addEventListener("pointercancel",endCropDrag);
+
+// Drag the inside of the border to move the whole crop box.
+cropBox?.addEventListener("pointerdown",e=>{
+  if(e.target.closest(".crop-handle")) return;
+  beginCropDrag(e,"move");
+});
+cropBox?.addEventListener("pointermove",e=>{
+  if(cropDrag && cropDrag.pointerId===e.pointerId){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}
+});
+const endCropDrag=e=>{
+  if(cropDrag && (!e.pointerId || cropDrag.pointerId===e.pointerId)){
+    cropDrag=null; cropPending=null; cropBox?.classList.remove("is-resizing"); renderCrop();
+  }
+};
+cropBox?.addEventListener("pointerup",endCropDrag);
+cropBox?.addEventListener("pointercancel",endCropDrag);
 window.addEventListener("resize",()=>{if(activeTool==="capture") scheduleCropRender();});
 
 async function materializeCaptureFiles(){
