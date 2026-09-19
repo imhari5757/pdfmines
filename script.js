@@ -29,132 +29,100 @@ function addFiles(newFiles){
 
 let desktopDragIndex = null;
 let touchDrag = {
-  active: false,
-  startIndex: -1,
-  el: null,
-  ghost: null,
-  placeholder: null,
-  pointerId: null,
-  startX: 0,
-  startY: 0
+  active:false, startIndex:-1, el:null, ghost:null,
+  hoverIndex:-1, lastX:0, lastY:0, pointerId:null,
+  startX:0, startY:0
 };
 
-function reorderFiles(fromIndex, toIndex){
-  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 ||
-      fromIndex >= files.length || toIndex >= files.length) return;
-  const moved = files.splice(fromIndex, 1)[0];
-  files.splice(toIndex, 0, moved);
+function reorderFiles(fromIndex,toIndex){
+  if(fromIndex===toIndex || fromIndex<0 || toIndex<0 ||
+     fromIndex>=files.length || toIndex>=files.length) return;
+  const moved=files.splice(fromIndex,1)[0];
+  files.splice(toIndex,0,moved);
 }
 
-function makeTouchGhost(el, x, y){
-  const rect = el.getBoundingClientRect();
-  const ghost = el.cloneNode(true);
+function makeTouchGhost(el,x,y){
+  const r=el.getBoundingClientRect();
+  const ghost=el.cloneNode(true);
   ghost.classList.add("touch-drag-ghost");
   ghost.classList.remove("dragging","drag-over");
-  ghost.style.width = `${rect.width}px`;
-  ghost.style.height = `${rect.height}px`;
-  ghost.style.left = `${x - rect.width / 2}px`;
-  ghost.style.top = `${y - rect.height / 2}px`;
+  ghost.style.width=`${r.width}px`;
+  ghost.style.height=`${r.height}px`;
+  ghost.style.left=`${x-r.width/2}px`;
+  ghost.style.top=`${y-r.height/2}px`;
   document.body.appendChild(ghost);
   return ghost;
 }
 
-function updateTouchGhost(x, y){
-  if (!touchDrag.ghost) return;
-  const w = touchDrag.ghost.getBoundingClientRect().width;
-  const h = touchDrag.ghost.getBoundingClientRect().height;
-  touchDrag.ghost.style.left = `${x - w / 2}px`;
-  touchDrag.ghost.style.top = `${y - h / 2}px`;
+function updateTouchGhost(x,y){
+  if(!touchDrag.ghost) return;
+  const w=touchDrag.ghost.offsetWidth;
+  const h=touchDrag.ghost.offsetHeight;
+  touchDrag.ghost.style.left=`${x-w/2}px`;
+  touchDrag.ghost.style.top=`${y-h/2}px`;
 }
 
-function getTouchDropTarget(x, y){
-  const elements = [...thumbs.querySelectorAll(".thumb:not(.dragging)")];
-  let best = null;
-  let bestDistance = Infinity;
-
-  for (const el of elements) {
-    const r = el.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    const d = Math.abs(x - cx) + Math.abs(y - cy) * 0.35;
-    if (d < bestDistance) {
-      bestDistance = d;
-      best = el;
-    }
-  }
+function findTouchHoverIndex(x,y){
+  let best=-1, bestD=Infinity;
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    if(el===touchDrag.el) return;
+    const i=Number(el.dataset.fileIndex);
+    if(!Number.isInteger(i)) return;
+    const r=el.getBoundingClientRect();
+    const d=Math.hypot(x-(r.left+r.width/2),(y-(r.top+r.height/2))*0.45);
+    if(d<bestD){bestD=d;best=i;}
+  });
   return best;
 }
 
-function updateTouchPlaceholder(x, y){
-  if (!touchDrag.placeholder) return;
-
-  const target = getTouchDropTarget(x, y);
-  if (!target) return;
-
-  const r = target.getBoundingClientRect();
-  const before = x < r.left + r.width / 2;
-
-  [...thumbs.children].forEach(el => {
-    if (el.classList) el.classList.remove("drag-over");
+function showTouchDropTarget(index){
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    el.classList.toggle("drag-over",
+      Number(el.dataset.fileIndex)===index && el!==touchDrag.el);
   });
+}
 
-  target.classList.add("drag-over");
-
-  if (before) {
-    if (touchDrag.placeholder.nextSibling !== target) {
-      thumbs.insertBefore(touchDrag.placeholder, target);
-    }
-  } else {
-    if (target.nextSibling !== touchDrag.placeholder) {
-      thumbs.insertBefore(touchDrag.placeholder, target.nextSibling);
-    }
-  }
+function resetTouchDrag(){
+  if(touchDrag.ghost) touchDrag.ghost.remove();
+  touchDrag.el?.classList.remove("dragging");
+  thumbs.querySelectorAll(".thumb").forEach(el=>{
+    el.classList.remove("drag-over");
+    el.removeAttribute("aria-grabbed");
+  });
+  touchDrag={
+    active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,
+    lastX:0,lastY:0,pointerId:null,startX:0,startY:0
+  };
 }
 
 function finishTouchDrag(){
-  if (!touchDrag.active) return;
+  if(!touchDrag.active){resetTouchDrag();return;}
+  const from=touchDrag.startIndex;
+  const hover=touchDrag.hoverIndex;
 
-  // Rebuild the file order from the placeholder position. The dragged
-  // thumbnail itself remains dimmed at its original DOM position.
-  const order = [];
-  [...thumbs.children].forEach(el => {
-    if (el === touchDrag.placeholder) {
-      order.push(touchDrag.startIndex);
-      return;
+  if(hover>=0 && hover!==from){
+    const target=[...thumbs.querySelectorAll(".thumb")]
+      .find(el=>Number(el.dataset.fileIndex)===hover);
+    let to=hover;
+    if(target){
+      const r=target.getBoundingClientRect();
+      if(touchDrag.lastX>r.left+r.width/2) to=hover+1;
     }
-    if (el.classList.contains("thumb") && el !== touchDrag.el) {
-      const idx = Number(el.dataset.fileIndex);
-      if (Number.isInteger(idx)) order.push(idx);
-    }
-  });
-
-  if (order.length === files.length && new Set(order).size === files.length) {
-    files = order.map(i => files[i]);
+    if(to>from) to--;
+    to=Math.max(0,Math.min(files.length-1,to));
+    reorderFiles(from,to);
   }
 
-  if (touchDrag.ghost) touchDrag.ghost.remove();
-  if (touchDrag.placeholder) touchDrag.placeholder.remove();
-
-  touchDrag.el?.classList.remove("dragging");
-  [...thumbs.children].forEach(el => el.classList.remove("drag-over"));
-
-  touchDrag = {
-    active: false,
-    startIndex: -1,
-    el: null,
-    ghost: null,
-    placeholder: null,
-    pointerId: null,
-    startX: 0,
-    startY: 0
-  };
-
+  resetTouchDrag();
   render();
 }
 
 function render(){
   fileArea.classList.toggle("hidden", files.length === 0);
   fileCount.textContent = `${files.length} page${files.length === 1 ? "" : "s"}`;
+  thumbs.querySelectorAll("img").forEach(img=>{
+    if(img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  });
   thumbs.innerHTML = "";
 
   files.forEach((file, i) => {
@@ -167,7 +135,6 @@ function render(){
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
     img.draggable = false;
-    img.onload = () => URL.revokeObjectURL(img.src);
 
     const num = document.createElement("span");
     num.className = "num";
@@ -225,80 +192,55 @@ function render(){
       }
     });
 
-    // Mobile / touch drag: create a visible "lifted" thumbnail and a
-    // placeholder so the user can see exactly where the photo will land.
+    // Touch / mobile drag: use a visual floating copy. We never move the
+    // real DOM thumbnail during the finger movement, avoiding mobile
+    // browser drag/scroll errors.
     div.addEventListener("pointerdown", e => {
-      if (e.pointerType !== "touch" || e.target.closest("button")) return;
-
-      touchDrag.active = false;
-      touchDrag.startIndex = i;
-      touchDrag.el = div;
-      touchDrag.pointerId = e.pointerId;
-      touchDrag.startX = e.clientX;
-      touchDrag.startY = e.clientY;
-
-      try { div.setPointerCapture(e.pointerId); } catch (_) {}
-    }, {passive:false});
+      if(e.pointerType!=="touch" || e.target.closest("button")) return;
+      touchDrag.active=false;
+      touchDrag.startIndex=i;
+      touchDrag.el=div;
+      touchDrag.pointerId=e.pointerId;
+      touchDrag.startX=e.clientX;
+      touchDrag.startY=e.clientY;
+      touchDrag.lastX=e.clientX;
+      touchDrag.lastY=e.clientY;
+      try{div.setPointerCapture(e.pointerId);}catch(_){}
+    },{passive:false});
 
     div.addEventListener("pointermove", e => {
-      if (e.pointerType !== "touch" || touchDrag.el !== div ||
-          touchDrag.pointerId !== e.pointerId) return;
+      if(e.pointerType!=="touch" || touchDrag.el!==div ||
+         touchDrag.pointerId!==e.pointerId) return;
 
-      const dx = e.clientX - touchDrag.startX;
-      const dy = e.clientY - touchDrag.startY;
+      touchDrag.lastX=e.clientX;
+      touchDrag.lastY=e.clientY;
 
-      if (!touchDrag.active) {
-        if (Math.hypot(dx, dy) < 8) return;
-
-        touchDrag.active = true;
+      if(!touchDrag.active){
+        if(Math.hypot(e.clientX-touchDrag.startX,e.clientY-touchDrag.startY)<8) return;
+        touchDrag.active=true;
         e.preventDefault();
-
         div.classList.add("dragging");
-
-        const rect = div.getBoundingClientRect();
-        const placeholder = document.createElement("div");
-        placeholder.className = "thumb-drag-placeholder";
-        placeholder.style.width = `${rect.width}px`;
-        placeholder.style.height = `${rect.height}px`;
-        placeholder.innerHTML = "<span>Drop here</span>";
-        touchDrag.placeholder = placeholder;
-
-        thumbs.insertBefore(placeholder, div);
-        touchDrag.ghost = makeTouchGhost(div, e.clientX, e.clientY);
-
-        // Keep the original card in the list as a dimmed source.
-        div.setAttribute("aria-grabbed", "true");
+        div.setAttribute("aria-grabbed","true");
+        touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
       }
 
-      if (!touchDrag.active) return;
       e.preventDefault();
-
-      updateTouchGhost(e.clientX, e.clientY);
-      updateTouchPlaceholder(e.clientX, e.clientY);
-    }, {passive:false});
+      updateTouchGhost(e.clientX,e.clientY);
+      touchDrag.hoverIndex=findTouchHoverIndex(e.clientX,e.clientY);
+      showTouchDropTarget(touchDrag.hoverIndex);
+    },{passive:false});
 
     div.addEventListener("pointerup", e => {
-      if (e.pointerType === "touch" && touchDrag.el === div) {
-        if (touchDrag.active) finishTouchDrag();
-        else {
-          touchDrag = {
-            active:false,startIndex:-1,el:null,ghost:null,
-            placeholder:null,pointerId:null,startX:0,startY:0
-          };
-        }
+      if(e.pointerType==="touch" && touchDrag.el===div &&
+         touchDrag.pointerId===e.pointerId){
+        e.preventDefault();
+        finishTouchDrag();
       }
-    });
+    },{passive:false});
 
     div.addEventListener("pointercancel", e => {
-      if (e.pointerType === "touch" && touchDrag.el === div) {
-        if (touchDrag.active) finishTouchDrag();
-        else {
-          touchDrag = {
-            active:false,startIndex:-1,el:null,ghost:null,
-            placeholder:null,pointerId:null,startX:0,startY:0
-          };
-        }
-      }
+      if(e.pointerType==="touch" && touchDrag.el===div &&
+         touchDrag.pointerId===e.pointerId) resetTouchDrag();
     });
   });
 
