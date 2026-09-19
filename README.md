@@ -1,30 +1,18 @@
-# PDFMines — Local Website Prototype
+# PDFMines
 
-## Run
-1. Extract the ZIP.
-2. Open `index.html` in Chrome/Edge/Safari.
-3. Click **Add Photos**.
-4. Select multiple JPG/PNG/WEBP files.
-5. Choose page size/orientation/quality.
-6. Click **Create PDF**.
+Fast, privacy-first PDF tools designed for browser-side processing.
 
-## Important
-The current prototype uses jsPDF from cdnjs, so the first run needs an internet connection to load the PDF library.
-
-The selected images are processed in the browser; this prototype does not send them to a PDFMines backend.
+## Current tool
+- Images → PDF (JPG/JPEG/PNG/WEBP)
+- Multiple images
+- A4 / Letter / Original page size
+- Portrait / Landscape
+- High / Medium / Small file quality
+- Drag & drop and page removal
+- No PDF library or third-party runtime dependency required for image-to-PDF
 
 ## GitHub Pages
-Upload `index.html`, `style.css`, and `script.js` to a GitHub repository and enable GitHub Pages. No custom domain is required for testing.
+Upload the files to the repository root and enable GitHub Pages from the `main` branch and `/ (root)`.
 
-## Current feature
-- Responsive premium UI
-- Image selection + drag/drop
-- Thumbnail preview
-- Remove files
-- A4 / Letter / Original
-- Portrait / Landscape
-- High / Medium / Small-file quality
-- Client-side image → PDF conversion
-- PDF download
-
-Merge PDF, image+PDF combine, compression, split, and other tools are placeholders for the next build.
+## Privacy note
+The current Images → PDF tool processes selected images in the browser and does not upload them to a PDFMines server.
