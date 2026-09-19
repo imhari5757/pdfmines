@@ -152,7 +152,7 @@ function buildImagePdf(pages){
     const jpeg = dataUrlToBytes(page.data);
     const pageW = pageWmmToPt(page.pageWmm);
     const pageH = pageWmmToPt(page.pageHmm);
-    const margin = pageWmmToPt(8);
+    const margin = pageWmmToPt(5);
     const maxW = Math.max(1, pageW - margin * 2);
     const maxH = Math.max(1, pageH - margin * 2);
     const scale = Math.min(maxW / page.width, maxH / page.height);
