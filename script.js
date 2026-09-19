@@ -46,8 +46,14 @@ function makeTouchGhost(el,x,y){
   const ghost=el.cloneNode(true);
   ghost.classList.add("touch-drag-ghost");
   ghost.classList.remove("dragging","drag-over");
-  ghost.style.width=`${r.width}px`;
-  ghost.style.height=`${r.height}px`;
+  // The real thumbnails are a 3-column CSS grid with width:100% !important.
+  // Force the floating drag preview to keep the exact measured thumbnail size.
+  ghost.style.setProperty('width', `${r.width}px`, 'important');
+  ghost.style.setProperty('min-width', '0px', 'important');
+  ghost.style.setProperty('max-width', `${r.width}px`, 'important');
+  ghost.style.setProperty('height', `${r.height}px`, 'important');
+  ghost.style.setProperty('min-height', '0px', 'important');
+  ghost.style.setProperty('max-height', `${r.height}px`, 'important');
   ghost.style.left=`${x-r.width/2}px`;
   ghost.style.top=`${y-r.height/2}px`;
   document.body.appendChild(ghost);
