@@ -14,10 +14,3 @@ Client-side Images → PDF prototype for GitHub Pages.
 
 ## GitHub Pages
 Upload the files in this folder to the repository root. The `index.html` uses `script.js?v=3` to avoid stale browser caching after deployment.
-
-
-### Capture review / elastic crop update
-- Captured pages open immediately in a dedicated review interface with a large image preview.
-- 8-point crop handles resize independently without swapping opposite edges during drag.
-- Corner handles can move horizontally and vertically together without jumpy inversion.
-- Back, Recapture, Use this page, and Capture next page controls are included.
