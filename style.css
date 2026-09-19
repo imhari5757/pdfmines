@@ -81,3 +81,32 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
 .thumb.dragging{opacity:.25!important;transform:scale(.96)}
 .thumb.drag-over{border-color:var(--accent,#5b5bf7)!important;box-shadow:0 0 0 3px rgba(91,91,247,.22),0 8px 18px rgba(91,91,247,.12);transform:translateY(-3px)}
 @media (pointer:coarse){.thumb{touch-action:none!important}}
+
+/* Photo thumbnails: fixed 3-column matrix on mobile and desktop.
+   The tool card itself does not resize horizontally as photos are added. */
+.thumbs{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:10px !important;
+  overflow:visible !important;
+  width:100% !important;
+  padding:13px 0 !important;
+  box-sizing:border-box;
+}
+.thumb{
+  min-width:0 !important;
+  width:100% !important;
+  height:112px !important;
+  box-sizing:border-box;
+}
+.thumb img{
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  object-fit:contain !important;
+  background:#f7f8fb;
+}
+@media(max-width:520px){
+  .thumbs{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:10px !important;}
+  .thumb{height:112px !important;}
+}

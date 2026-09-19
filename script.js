@@ -133,8 +133,24 @@ function render(){
     div.title = "Drag to reorder";
 
     const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
+    const previewUrl = URL.createObjectURL(file);
+    img.src = previewUrl;
     img.draggable = false;
+    img.decoding = "async";
+    img.loading = "eager";
+    img.onerror = async () => {
+      // Android browsers can occasionally fail to paint a blob URL even
+      // though the file itself is valid. Fall back to a data URL so the
+      // thumbnail is always visible before PDF creation.
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          img.src = reader.result;
+          URL.revokeObjectURL(previewUrl);
+        };
+        reader.readAsDataURL(file);
+      } catch (_) {}
+    };
 
     const num = document.createElement("span");
     num.className = "num";
