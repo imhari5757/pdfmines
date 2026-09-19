@@ -76,6 +76,7 @@
     <article class="tool-card"><div class="tool-icon">✂️</div><h3>Split PDF</h3><p>Extract selected pages into a new PDF.</p><button class="tool-open" data-tool="split">Open tool →</button></article>
     <article class="tool-card"><div class="tool-icon">🔄</div><h3>Rotate Pages</h3><p>Rotate all or selected PDF pages.</p><button class="tool-open" data-tool="rotate">Open tool →</button></article>
     <article class="tool-card"><div class="tool-icon">🔢</div><h3>Page Numbers</h3><p>Add clean page numbers to your PDF.</p><button class="tool-open" data-tool="number">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">📷</div><h3>Capture Images → PDF</h3><p>Capture documents with your camera, adjust borders and create a PDF.</p><button class="tool-open" data-tool="capture">Open tool →</button></article>
   </div>
 </section>
 
@@ -99,12 +100,96 @@
     <div id="toolFiles" class="tool-file-list"></div>
 
     <div id="toolOptions" class="tool-options">
-      <label id="splitPagesWrap" class="tool-option hidden">Pages
-        <input id="splitPages" type="text" placeholder="e.g. 1-3,5,7-9">
-      </label>
+      <div id="splitPagesWrap" class="split-options hidden">
+        <label class="tool-option">Pages
+          <input id="splitPages" type="text" placeholder="e.g. 1-3,5,7-9">
+          <small class="option-hint">Use commas to define separate split groups when downloading different PDFs.</small>
+        </label>
+        <div class="tool-option">Output
+          <div class="split-output-row">
+            <label class="split-output-card"><input type="radio" name="splitOutput" value="single" checked><span><b>All in one PDF</b><small>Selected pages stay together in one PDF.</small></span></label>
+            <label class="split-output-card"><input type="radio" name="splitOutput" value="separate"><span><b>Split as different PDFs</b><small>Each comma-separated range is downloaded separately.</small></span></label>
+          </div>
+        </div>
+      </div>
       <label id="rotateAngleWrap" class="tool-option hidden">Rotation
         <select id="rotateAngle"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select>
       </label>
+      <div id="captureOptionsWrap" class="capture-options hidden">
+        <div class="capture-header">
+          <div>
+            <div class="number-options-title">Capture Images → PDF</div>
+            <div class="capture-subtitle">Use your camera or upload images. Borders are adjusted locally in your browser.</div>
+          </div>
+        </div>
+
+        <div class="capture-camera-card">
+          <video id="captureVideo" class="capture-video" autoplay playsinline muted></video>
+          <div id="captureVideoPlaceholder" class="capture-video-placeholder">Camera preview will appear here.</div>
+          <div class="capture-camera-actions">
+            <button type="button" id="captureStartCamera" class="btn secondary small">Start camera</button>
+            <button type="button" id="captureTakePhoto" class="btn primary small" disabled>Capture photo</button>
+            <button type="button" id="captureStopCamera" class="btn secondary small" disabled>Stop</button>
+          </div>
+        </div>
+
+        <div class="capture-upload-row">
+          <button type="button" id="captureUploadBtn" class="btn secondary small">＋ Add photos</button>
+          <span>JPG, PNG or WEBP</span>
+          <input id="captureUploadInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        </div>
+
+        <div id="captureEditorEmpty" class="capture-editor-empty">Capture or add a document to adjust its borders.</div>
+        <div id="captureEditor" class="capture-editor hidden">
+          <div class="capture-editor-top">
+            <div class="capture-editor-nav">
+              <button type="button" id="captureBackBtn" class="btn secondary small" disabled>← Back</button>
+              <button type="button" id="captureRecaptureBtn" class="btn secondary small">↻ Recapture</button>
+            </div>
+            <b id="captureEditorTitle">Page 1</b>
+            <div class="capture-mode-row">
+              <label><input type="radio" name="captureBorderMode" value="auto" checked> Automatic border adjustment</label>
+              <label><input type="radio" name="captureBorderMode" value="manual"> Manual border adjustment</label>
+            </div>
+          </div>
+          <div id="cropViewport" class="crop-viewport">
+            <img id="cropImage" alt="Document preview">
+            <div id="cropShadeTop" class="crop-shade crop-shade-top"></div>
+            <div id="cropShadeLeft" class="crop-shade crop-shade-left"></div>
+            <div id="cropShadeRight" class="crop-shade crop-shade-right"></div>
+            <div id="cropShadeBottom" class="crop-shade crop-shade-bottom"></div>
+            <div id="cropBox" class="crop-box">
+              <button class="crop-handle nw" data-handle="nw" aria-label="Adjust top left"></button>
+              <button class="crop-handle n" data-handle="n" aria-label="Adjust top"></button>
+              <button class="crop-handle ne" data-handle="ne" aria-label="Adjust top right"></button>
+              <button class="crop-handle w" data-handle="w" aria-label="Adjust left"></button>
+              <button class="crop-handle e" data-handle="e" aria-label="Adjust right"></button>
+              <button class="crop-handle sw" data-handle="sw" aria-label="Adjust bottom left"></button>
+              <button class="crop-handle s" data-handle="s" aria-label="Adjust bottom"></button>
+              <button class="crop-handle se" data-handle="se" aria-label="Adjust bottom right"></button>
+            </div>
+          </div>
+          <div class="crop-controls">
+            <button type="button" id="captureAutoAdjust" class="btn secondary small">✨ Auto-adjust border</button>
+            <button type="button" id="captureResetCrop" class="btn secondary small">Reset border</button>
+            <span id="captureCropInfo">Border: automatic</span>
+          </div>
+          <div class="capture-pages" id="capturePages"></div>
+        </div>
+
+        <div class="capture-pdf-options">
+          <label class="tool-option">Page size
+            <select id="capturePageSize"><option value="a4" selected>A4</option><option value="letter">Letter</option><option value="original">Original ratio</option></select>
+          </label>
+          <label class="tool-option">Quality
+            <select id="captureQuality"><option value="high" selected>High</option><option value="medium">Medium</option><option value="small">Small file</option></select>
+          </label>
+          <label class="tool-option">Colour
+            <select id="captureColor"><option value="color" selected>Colour</option><option value="bw">Black &amp; White</option></select>
+          </label>
+        </div>
+      </div>
+
       <div id="numberOptionsWrap" class="number-options hidden">
         <div class="number-options-title">Page Number options</div>
 
@@ -186,6 +271,6 @@
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="script.js?v=22"></script>
+<script src="script.js?v=24"></script>
 </body>
 </html>

@@ -168,3 +168,52 @@ body.modal-open{overflow:hidden}
   .text-format-bar{width:100%;overflow-x:auto}
   .text-format-bar select,.text-format-bar button{flex:0 0 auto}
 }
+
+.split-options{display:grid;gap:14px;margin:12px 0}
+.option-hint{display:block;color:#7a8190;font-size:11px;font-weight:500;line-height:1.4}
+.split-output-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.split-output-card{display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid #dfe3ed;border-radius:12px;background:#fff;cursor:pointer;transition:.15s ease}
+.split-output-card:has(input:checked){border-color:#5b5ff0;box-shadow:0 0 0 2px rgba(91,95,240,.10);background:#fafaff}
+.split-output-card input{margin-top:3px;accent-color:#5b5ff0}
+.split-output-card span{display:grid;gap:3px}
+.split-output-card b{font-size:13px;color:#263247}
+.split-output-card small{font-size:11px;line-height:1.35;color:#7a8190;font-weight:500}
+@media(max-width:640px){.split-output-row{grid-template-columns:1fr}}
+
+/* Capture Images -> PDF */
+.capture-options{display:grid;gap:14px;margin:16px 0 8px;border:1px solid #e7e9f0;border-radius:18px;padding:18px;background:#fff}
+.capture-header{display:flex;justify-content:space-between;gap:12px}
+.capture-subtitle{font-size:12px;color:#737b8b;margin-top:4px;line-height:1.45}
+.capture-camera-card{position:relative;border:1px solid #dfe3ed;border-radius:16px;background:#111827;overflow:hidden;min-height:180px}
+.capture-video{display:block;width:100%;max-height:360px;min-height:180px;object-fit:contain;background:#111827}
+.capture-video-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#cbd5e1;font-size:13px;pointer-events:none}
+.capture-camera-actions{display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:#fff;border-top:1px solid #e5e8f0}
+.capture-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.capture-upload-row span{font-size:12px;color:#7a8190}
+.capture-editor-empty{padding:22px;text-align:center;border:1px dashed #d8ddeb;border-radius:14px;color:#7b8190;font-size:13px;background:#fafbff}
+.capture-editor{display:grid;gap:12px}
+.capture-editor-top{display:grid;gap:10px}
+.capture-editor-nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.capture-editor-nav .btn:disabled{opacity:.45;cursor:not-allowed}
+.capture-mode-row{display:flex;gap:18px;flex-wrap:wrap}
+.capture-mode-row label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:650;color:#4e5666;cursor:pointer}
+.capture-mode-row input{accent-color:#5b5ff0}
+.crop-viewport{position:relative;width:100%;height:min(55vh,460px);min-height:260px;background:#111827;border-radius:14px;overflow:hidden;touch-action:none;user-select:none}
+.crop-viewport>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
+.crop-shade{position:absolute;background:rgba(15,23,42,.52);pointer-events:none}
+.crop-shade-top{left:0;right:0;top:0}
+.crop-shade-bottom{left:0;right:0;bottom:0}
+.crop-shade-left{left:0}
+.crop-shade-right{right:0}
+.crop-box{position:absolute;border:2px solid #4ade80;box-shadow:0 0 0 1px rgba(0,0,0,.18);touch-action:none;cursor:move}
+.crop-handle{position:absolute;width:18px;height:18px;border:2px solid #fff;background:#4ade80;border-radius:50%;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.35);touch-action:none}
+.crop-handle.nw{left:-10px;top:-10px;cursor:nwse-resize}.crop-handle.n{left:50%;top:-10px;transform:translateX(-50%);cursor:ns-resize}.crop-handle.ne{right:-10px;top:-10px;cursor:nesw-resize}
+.crop-handle.w{left:-10px;top:50%;transform:translateY(-50%);cursor:ew-resize}.crop-handle.e{right:-10px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+.crop-handle.sw{left:-10px;bottom:-10px;cursor:nesw-resize}.crop-handle.s{left:50%;bottom:-10px;transform:translateX(-50%);cursor:ns-resize}.crop-handle.se{right:-10px;bottom:-10px;cursor:nwse-resize}
+.crop-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.crop-controls span{font-size:12px;color:#707888;margin-left:auto}
+.capture-pages{display:flex;gap:7px;overflow-x:auto;padding:3px 1px}
+.capture-page-chip{border:1px solid #dfe3ed;background:#fff;border-radius:10px;padding:7px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.capture-page-chip.active{border-color:#5b5ff0;background:#f5f5ff;box-shadow:0 0 0 2px rgba(91,95,240,.08)}
+.capture-pdf-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(max-width:640px){.capture-pdf-options{grid-template-columns:1fr}.crop-viewport{height:58vh;min-height:280px}.crop-controls span{margin-left:0;width:100%}}

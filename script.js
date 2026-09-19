@@ -778,6 +778,9 @@ function openTool(name){
   toolInput.value="";
   toolInput.accept=cfg.accept;
   toolInput.multiple=cfg.multiple;
+  toolDrop.classList.toggle("hidden",name==="capture");
+  toolFilesEl.classList.toggle("hidden",name==="capture");
+  captureOptionsWrap?.classList.toggle("hidden",name!=="capture");
   toolTitle.textContent=cfg.title;
   toolDesc.textContent=cfg.desc;
   toolDropTitle.textContent=cfg.multiple ? "Choose files" : "Choose a file";
@@ -789,6 +792,9 @@ function openTool(name){
   toolStatus.textContent="";
   splitPagesWrap.classList.toggle("hidden",name!=="split");
   rotateAngleWrap.classList.toggle("hidden",name!=="rotate");
+  if(name==="split") {
+    document.querySelectorAll('input[name="splitOutput"]').forEach(r=>r.checked=(r.value==="single"));
+  }
   numberOptionsWrap.classList.toggle("hidden",name!=="number");
   if(name==="number") {
     setNumberPosition("bottom-center");
@@ -797,6 +803,11 @@ function openTool(name){
     $("numberBold")?.classList.remove("active");
     $("numberItalic")?.classList.remove("active");
     $("numberUnderline")?.classList.remove("active");
+  }
+  if(name==="capture") {
+    captureItems=[]; captureIndex=0; renderCapturePages();
+    captureEditor.classList.add("hidden"); captureEditorEmpty.classList.remove("hidden");
+    stopCaptureCamera();
   }
   renderToolFiles();
   toolModal.classList.remove("hidden");
@@ -808,9 +819,11 @@ function closeTool(){
   toolModal.classList.add("hidden");
   toolModal.setAttribute("aria-hidden","true");
   document.body.classList.remove("modal-open");
+  if(activeTool==="capture") stopCaptureCamera();
   activeTool=null;
   toolFiles=[];
   toolInput.value="";
+  captureUploadInput && (captureUploadInput.value="");
 }
 
 document.querySelectorAll(".tool-open").forEach(btn=>{
@@ -824,6 +837,11 @@ toolDrop.addEventListener("click",e=>{
 });
 toolInput.addEventListener("change",async()=>{
   const chosen=[...toolInput.files];
+  if(activeTool==="capture"){
+    toolInput.value="";
+    await addCaptureFiles(chosen);
+    return;
+  }
   if(activeTool==="mix"){
     toolFiles.push(...chosen.filter(f=>/^(application\/pdf|image\/jpeg|image\/png|image\/webp)$/i.test(f.type)));
   }else{
@@ -943,16 +961,42 @@ function parsePageSelection(text,count){
   return [...set].sort((a,b)=>a-b);
 }
 
-async function splitPdf(file){
+function parseSplitGroups(text,count){
+  const raw=text.trim();
+  if(!raw) return [Array.from({length:count},(_,i)=>i)];
+  const groups=[];
+  for(const part of raw.split(",")){
+    const t=part.trim();
+    if(!t) continue;
+    groups.push(parsePageSelection(t,count));
+  }
+  if(!groups.length) throw new Error("Select at least one page.");
+  return groups;
+}
+
+async function makeSplitPdf(src,indices){
   const {PDFDocument}=ensurePDFLib();
-  const src=await PDFDocument.load(await readBytes(file));
-  const text=$("splitPages").value.trim();
-  const indices=text ? parsePageSelection(text,src.getPageCount()) : src.getPageIndices();
   if(!indices.length) throw new Error("Select at least one page.");
   const out=await PDFDocument.create();
   const pages=await out.copyPages(src,indices);
   pages.forEach(p=>out.addPage(p));
   return await out.save({useObjectStreams:true});
+}
+
+async function splitPdf(file, separate=false){
+  const {PDFDocument}=ensurePDFLib();
+  const src=await PDFDocument.load(await readBytes(file));
+  const text=$("splitPages").value.trim();
+  if(!separate){
+    const indices=text ? parsePageSelection(text,src.getPageCount()) : src.getPageIndices();
+    return {bytes:await makeSplitPdf(src,indices), count:1};
+  }
+  const groups=parseSplitGroups(text,src.getPageCount());
+  const outputs=[];
+  for(const indices of groups){
+    outputs.push(await makeSplitPdf(src,indices));
+  }
+  return {bytesList:outputs,count:outputs.length};
 }
 
 async function rotatePdf(file){
@@ -1039,9 +1083,348 @@ async function numberPdf(file){
   return await doc.save({useObjectStreams:true});
 }
 
+
+/* =========================
+   Capture Images -> PDF
+   Camera + conservative automatic document border detection + smooth manual crop.
+   ========================= */
+const captureOptionsWrap = $("captureOptionsWrap");
+const captureVideo = $("captureVideo");
+const captureVideoPlaceholder = $("captureVideoPlaceholder");
+const captureStartCamera = $("captureStartCamera");
+const captureTakePhoto = $("captureTakePhoto");
+const captureStopCamera = $("captureStopCamera");
+const captureUploadBtn = $("captureUploadBtn");
+const captureUploadInput = $("captureUploadInput");
+const captureEditorEmpty = $("captureEditorEmpty");
+const captureEditor = $("captureEditor");
+const captureEditorTitle = $("captureEditorTitle");
+const captureBackBtn = $("captureBackBtn");
+const captureRecaptureBtn = $("captureRecaptureBtn");
+const cropViewport = $("cropViewport");
+const cropImage = $("cropImage");
+const cropBox = $("cropBox");
+const cropInfo = $("captureCropInfo");
+const capturePagesEl = $("capturePages");
+const captureAutoAdjust = $("captureAutoAdjust");
+const captureResetCrop = $("captureResetCrop");
+let captureItems = [];
+let captureIndex = 0;
+let captureStream = null;
+let cropDrag = null;
+let cropRaf = 0;
+let cropPending = null;
+let recaptureMode = false;
+
+function stopCaptureCamera(){
+  if(captureStream){
+    captureStream.getTracks().forEach(t=>t.stop());
+    captureStream=null;
+  }
+  captureVideo.srcObject=null;
+  captureStartCamera.disabled=false;
+  captureTakePhoto.disabled=true;
+  captureStopCamera.disabled=true;
+  captureVideoPlaceholder.style.display="grid";
+}
+
+async function startCaptureCamera(){
+  stopCaptureCamera();
+  try{
+    captureStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    captureVideo.srcObject=captureStream;
+    await captureVideo.play();
+    captureVideoPlaceholder.style.display="none";
+    captureStartCamera.disabled=true;
+    captureTakePhoto.disabled=false;
+    captureStopCamera.disabled=false;
+  }catch(err){
+    toolStatus.textContent="Camera permission was not available. You can still add photos from your device.";
+  }
+}
+
+function makeImageFile(blob, name){
+  return new File([blob], name, {type:blob.type || "image/jpeg", lastModified:Date.now()});
+}
+
+function imageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Could not read this image."));};
+    img.src=url;
+  });
+}
+
+async function fileToDataUrlSafe(file){
+  return await fileToDataURL(file);
+}
+
+function clampCrop(c){
+  const min=0.025;
+  let l=Math.max(0,Math.min(1,c.l)), t=Math.max(0,Math.min(1,c.t));
+  let r=Math.max(0,Math.min(1,c.r)), b=Math.max(0,Math.min(1,c.b));
+  if(r-l<min){ if(l+min<=1) r=l+min; else l=r-min; }
+  if(b-t<min){ if(t+min<=1) b=t+min; else t=b-min; }
+  return {l,t,r,b};
+}
+
+async function detectDocumentCrop(file){
+  const img=await imageFromFile(file);
+  const max=900;
+  const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const w=Math.max(1,Math.round(img.naturalWidth*scale));
+  const h=Math.max(1,Math.round(img.naturalHeight*scale));
+  const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  ctx.drawImage(img,0,0,w,h);
+  const d=ctx.getImageData(0,0,w,h).data;
+  const sample=(x,y)=>{const i=(y*w+x)*4;return [d[i],d[i+1],d[i+2]];};
+  const pts=[sample(2,2),sample(w-3,2),sample(2,h-3),sample(w-3,h-3)];
+  const bg=[0,1,2].map(c=>pts.reduce((s,p)=>s+p[c],0)/pts.length);
+  const dist=(x,y)=>{const i=(y*w+x)*4;return Math.sqrt((d[i]-bg[0])**2+(d[i+1]-bg[1])**2+(d[i+2]-bg[2])**2);};
+  const threshold=34;
+  const rowScore=y=>{let hits=0, total=0; const step=Math.max(1,Math.floor(w/140)); for(let x=0;x<w;x+=step){total++; if(dist(x,y)>threshold) hits++;} return hits/Math.max(1,total);};
+  const colScore=x=>{let hits=0,total=0; const step=Math.max(1,Math.floor(h/140)); for(let y=0;y<h;y+=step){total++; if(dist(x,y)>threshold) hits++;} return hits/Math.max(1,total);};
+  const edgeFrac=0.018;
+  let left=0,right=w-1,top=0,bottom=h-1;
+  // Require persistent foreground across several nearby scan lines/columns.
+  const findStart=(fn,n)=>{for(let i=0;i<n;i++) if(fn(i)>edgeFrac && fn(Math.min(n-1,i+2))>edgeFrac) return i; return 0;};
+  const findEnd=(fn,n)=>{for(let i=n-1;i>=0;i--) if(fn(i)>edgeFrac && fn(Math.max(0,i-2))>edgeFrac) return i; return n-1;};
+  left=findStart(colScore,w); right=findEnd(colScore,w); top=findStart(rowScore,h); bottom=findEnd(rowScore,h);
+  const bw=right-left+1, bh=bottom-top+1;
+  const ratioW=bw/w, ratioH=bh/h;
+  // Conservative fallback: if detection is weak or nearly full-frame, keep the full image.
+  let confidence=0;
+  confidence += ratioW<0.96 ? 1 : 0;
+  confidence += ratioH<0.96 ? 1 : 0;
+  const paddingX=Math.max(8,Math.round(w*0.025));
+  const paddingY=Math.max(8,Math.round(h*0.025));
+  if(confidence===0 || ratioW<0.60 || ratioH<0.60){
+    return {l:0,t:0,r:1,b:1,confidence:0};
+  }
+  left=Math.max(0,left-paddingX); right=Math.min(w-1,right+paddingX);
+  top=Math.max(0,top-paddingY); bottom=Math.min(h-1,bottom+paddingY);
+  return {l:left/w,t:top/h,r:(right+1)/w,b:(bottom+1)/h,confidence:confidence};
+}
+
+function getDisplayedImageRect(){
+  if(!cropViewport || !cropImage.naturalWidth) return null;
+  const vw=cropViewport.clientWidth, vh=cropViewport.clientHeight;
+  const iw=cropImage.naturalWidth, ih=cropImage.naturalHeight;
+  const scale=Math.min(vw/iw,vh/ih);
+  const w=iw*scale, h=ih*scale;
+  return {x:(vw-w)/2,y:(vh-h)/2,w,h};
+}
+
+function renderCrop(){
+  const item=captureItems[captureIndex];
+  const rect=getDisplayedImageRect();
+  if(!item || !rect) return;
+  const c=clampCrop(item.crop);
+  item.crop=c;
+  const x=rect.x+c.l*rect.w, y=rect.y+c.t*rect.h;
+  const w=(c.r-c.l)*rect.w, h=(c.b-c.t)*rect.h;
+  cropBox.style.left=`${x}px`; cropBox.style.top=`${y}px`; cropBox.style.width=`${w}px`; cropBox.style.height=`${h}px`;
+  $("cropShadeTop").style.height=`${y}px`;
+  $("cropShadeBottom").style.height=`${Math.max(0,cropViewport.clientHeight-(y+h))}px`;
+  $("cropShadeLeft").style.top=`${y}px`; $("cropShadeLeft").style.width=`${x}px`; $("cropShadeLeft").style.height=`${h}px`;
+  $("cropShadeRight").style.top=`${y}px`; $("cropShadeRight").style.width=`${Math.max(0,cropViewport.clientWidth-(x+w))}px`; $("cropShadeRight").style.height=`${h}px`;
+  cropInfo.textContent=item.auto ? "Border: automatic · safety padding applied" : "Border: manual";
+}
+
+function scheduleCropRender(){
+  if(cropRaf) return;
+  cropRaf=requestAnimationFrame(()=>{cropRaf=0;renderCrop();});
+}
+
+async function selectCapturePage(index){
+  if(index<0 || index>=captureItems.length) return;
+  captureIndex=index;
+  const item=captureItems[index];
+  captureEditorTitle.textContent=`Page ${index+1} · ${item.file.name}`;
+  if(captureBackBtn) captureBackBtn.disabled=index<=0;
+  if(captureRecaptureBtn) captureRecaptureBtn.disabled=false;
+  cropImage.src=item.dataUrl;
+  cropImage.onload=()=>{renderCrop();};
+  document.querySelectorAll(".capture-page-chip").forEach((el,i)=>el.classList.toggle("active",i===index));
+  const radio=document.querySelector(`input[name="captureBorderMode"][value="${item.auto?"auto":"manual"}"]`);
+  if(radio) radio.checked=true;
+  captureEditorEmpty.classList.add("hidden");
+  captureEditor.classList.remove("hidden");
+}
+
+function goToPreviousCapture(){
+  if(captureIndex<=0) return;
+  selectCapturePage(captureIndex-1);
+}
+
+async function beginRecapture(){
+  if(!captureItems[captureIndex]) return;
+  recaptureMode=true;
+  if(!captureStream){
+    await startCaptureCamera();
+    if(!captureStream){
+      recaptureMode=false;
+      return;
+    }
+  }
+  toolStatus.textContent=`Ready to recapture Page ${captureIndex+1}. Capture a new photo to replace the current image.`;
+  captureVideo.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+async function addCaptureFiles(newFiles){
+  for(const file of newFiles.filter(f=>/^image\/(jpeg|png|webp)$/i.test(f.type))){
+    const dataUrl=await fileToDataUrlSafe(file);
+    let crop={l:0,t:0,r:1,b:1};
+    let auto=true;
+    try{crop=await detectDocumentCrop(file);}catch(_){auto=false;}
+    captureItems.push({file,dataUrl,crop,auto});
+  }
+  renderCapturePages();
+  if(captureItems.length) await selectCapturePage(captureItems.length-1);
+}
+
+function renderCapturePages(){
+  capturePagesEl.innerHTML="";
+  captureItems.forEach((item,i)=>{
+    const b=document.createElement("button"); b.type="button"; b.className="capture-page-chip"; b.textContent=`${i+1} · ${item.file.name}`;
+    b.onclick=()=>selectCapturePage(i); capturePagesEl.appendChild(b);
+  });
+}
+
+async function capturePhoto(){
+  if(!captureStream || !captureVideo.videoWidth) return;
+  const canvas=document.createElement("canvas");
+  canvas.width=captureVideo.videoWidth; canvas.height=captureVideo.videoHeight;
+  const ctx=canvas.getContext("2d");
+  // Mirroring is deliberately not used for the rear/document camera.
+  ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
+  const file=makeImageFile(blob,recaptureMode ? (captureItems[captureIndex]?.file.name || `Capture_${String(captureIndex+1).padStart(2,"0")}.jpg`) : `Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`);
+
+  if(recaptureMode && captureItems[captureIndex]){
+    const item=captureItems[captureIndex];
+    item.file=file;
+    item.dataUrl=await fileToDataUrlSafe(file);
+    try{
+      item.crop=await detectDocumentCrop(file);
+      item.auto=true;
+    }catch(_){
+      item.crop={l:0,t:0,r:1,b:1};
+      item.auto=false;
+    }
+    recaptureMode=false;
+    renderCapturePages();
+    await selectCapturePage(captureIndex);
+    toolStatus.textContent=`Page ${captureIndex+1} recaptured successfully.`;
+    return;
+  }
+
+  await addCaptureFiles([file]);
+}
+
+async function resetCurrentCrop(){
+  const item=captureItems[captureIndex]; if(!item) return;
+  item.crop={l:0,t:0,r:1,b:1}; item.auto=false;
+  document.querySelector('input[name="captureBorderMode"][value="manual"]')?.click();
+  renderCrop();
+}
+
+async function autoAdjustCurrentCrop(){
+  const item=captureItems[captureIndex]; if(!item) return;
+  try{
+    item.crop=await detectDocumentCrop(item.file); item.auto=true;
+    document.querySelector('input[name="captureBorderMode"][value="auto"]')?.click();
+    renderCrop();
+  }catch(err){ toolStatus.textContent="Automatic border detection could not analyze this image."; }
+}
+
+captureStartCamera?.addEventListener("click",startCaptureCamera);
+captureStopCamera?.addEventListener("click",()=>{recaptureMode=false;stopCaptureCamera();});
+captureTakePhoto?.addEventListener("click",capturePhoto);
+captureBackBtn?.addEventListener("click",goToPreviousCapture);
+captureRecaptureBtn?.addEventListener("click",beginRecapture);
+captureUploadBtn?.addEventListener("click",()=>captureUploadInput.click());
+captureUploadInput?.addEventListener("change",async()=>{const fs=[...captureUploadInput.files];captureUploadInput.value="";await addCaptureFiles(fs);});
+captureAutoAdjust?.addEventListener("click",autoAdjustCurrentCrop);
+captureResetCrop?.addEventListener("click",resetCurrentCrop);
+
+document.querySelectorAll('input[name="captureBorderMode"]').forEach(r=>r.addEventListener("change",async()=>{
+  const item=captureItems[captureIndex]; if(!item) return;
+  if(r.value==="auto" && r.checked){ await autoAdjustCurrentCrop(); }
+  if(r.value==="manual" && r.checked){ item.auto=false; renderCrop(); }
+}));
+
+function updateCropFromPointer(clientX,clientY){
+  if(!cropDrag) return;
+  const rect=getDisplayedImageRect(); if(!rect) return;
+  const dx=(clientX-cropDrag.startX)/rect.w, dy=(clientY-cropDrag.startY)/rect.h;
+  const s=cropDrag.startCrop; let c={...s};
+  const h=cropDrag.handle;
+  if(h.includes("w")) c.l=s.l+dx;
+  if(h.includes("e")) c.r=s.r+dx;
+  if(h.includes("n")) c.t=s.t+dy;
+  if(h.includes("s")) c.b=s.b+dy;
+  if(h==="move"){
+    const ww=s.r-s.l, hh=s.b-s.t;
+    c.l=Math.max(0,Math.min(1-ww,s.l+dx)); c.r=c.l+ww;
+    c.t=Math.max(0,Math.min(1-hh,s.t+dy)); c.b=c.t+hh;
+  }
+  c=clampCrop(c);
+  const item=captureItems[captureIndex]; if(item){item.crop=c;item.auto=false;}
+  cropPending=c;
+  scheduleCropRender();
+}
+
+cropBox?.addEventListener("pointerdown",e=>{
+  if(!captureItems[captureIndex]) return;
+  const handle=e.target.closest(".crop-handle")?.dataset.handle || "move";
+  cropDrag={handle,startX:e.clientX,startY:e.clientY,startCrop:{...captureItems[captureIndex].crop}};
+  cropBox.setPointerCapture?.(e.pointerId);
+  e.preventDefault(); e.stopPropagation();
+});
+cropBox?.addEventListener("pointermove",e=>{if(cropDrag){e.preventDefault();updateCropFromPointer(e.clientX,e.clientY);}});
+const endCropDrag=e=>{if(cropDrag){cropDrag=null;cropPending=null;renderCrop();}};
+cropBox?.addEventListener("pointerup",endCropDrag); cropBox?.addEventListener("pointercancel",endCropDrag);
+window.addEventListener("resize",()=>{if(activeTool==="capture") scheduleCropRender();});
+
+async function createCapturePdf(){
+  if(!captureItems.length) throw new Error("Capture or add at least one image first.");
+  const size=$("capturePageSize").value;
+  const quality=$("captureQuality").value;
+  const color=$("captureColor").value;
+  const pages=[];
+  for(let i=0;i<captureItems.length;i++){
+    const item=captureItems[i];
+    const img=await imageFromFile(item.file);
+    const sw=img.naturalWidth, sh=img.naturalHeight;
+    const sx=Math.max(0,Math.floor(item.crop.l*sw)), sy=Math.max(0,Math.floor(item.crop.t*sh));
+    const ex=Math.min(sw,Math.ceil(item.crop.r*sw)), ey=Math.min(sh,Math.ceil(item.crop.b*sh));
+    const cw=Math.max(1,ex-sx), ch=Math.max(1,ey-sy);
+    const c=document.createElement("canvas"); c.width=cw; c.height=ch;
+    const ctx=c.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+    ctx.drawImage(img,sx,sy,cw,ch,0,0,cw,ch);
+    const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error("Could not prepare image.")),"image/jpeg",quality==="small"?.72:quality==="medium"?.84:.90));
+    const cropped=makeImageFile(blob,`capture-${i+1}.jpg`);
+    const prepared=await prepareImage(cropped,quality,1,color);
+    let pageWmm=210,pageHmm=297;
+    if(size==="letter"){pageWmm=215.9;pageHmm=279.4;}
+    if(size==="original") pageHmm=pageWmm*(prepared.height/prepared.width);
+    pages.push({jpeg:prepared.jpeg,width:prepared.width,height:prepared.height,pageWmm,pageHmm,fitMode:"original"});
+    await new Promise(r=>setTimeout(r,0));
+  }
+  return buildImagePdf(pages);
+}
+
 toolRun.onclick=async()=>{
   if(!activeTool) return;
-  if(!toolFiles.length){
+  if(activeTool==="capture" && !captureItems.length){
+    toolStatus.textContent="Capture or add at least one image first.";
+    return;
+  }
+  if(activeTool!=="capture" && !toolFiles.length){
     toolStatus.textContent="Please choose a file first.";
     return;
   }
@@ -1057,15 +1440,31 @@ toolRun.onclick=async()=>{
     if(activeTool==="merge") bytes=await mergePdfFiles(toolFiles);
     else if(activeTool==="mix") bytes=await mixFiles(toolFiles);
     else if(activeTool==="compress") bytes=await optimizePdf(toolFiles[0]);
-    else if(activeTool==="split") bytes=await splitPdf(toolFiles[0]);
+    else if(activeTool==="split") {
+      const separate=document.querySelector('input[name="splitOutput"]:checked')?.value==="separate";
+      const result=await splitPdf(toolFiles[0],separate);
+      if(separate){
+        for(let i=0;i<result.bytesList.length;i++){
+          const part=result.bytesList[i];
+          downloadToolBytes(part,`PDFMines_Split_${i+1}_${new Date().toISOString().slice(0,10)}.pdf`);
+          if(i<result.bytesList.length-1) await new Promise(r=>setTimeout(r,350));
+        }
+        const totalKb=Math.round(result.bytesList.reduce((sum,b)=>sum+b.length,0)/1024);
+        toolStatus.textContent=`Done ✓  ${result.count} PDF files downloaded separately — ${totalKb} KB total.`;
+        return;
+      }
+      bytes=result.bytes;
+    }
     else if(activeTool==="rotate") bytes=await rotatePdf(toolFiles[0]);
     else if(activeTool==="number") bytes=await numberPdf(toolFiles[0]);
+    else if(activeTool==="capture") bytes=await createCapturePdf();
 
     const base=activeTool==="merge"?"PDFMines_Merged":
       activeTool==="mix"?"PDFMines_Combined":
       activeTool==="compress"?"PDFMines_Optimized":
       activeTool==="split"?"PDFMines_Split":
       activeTool==="rotate"?"PDFMines_Rotated":
+      activeTool==="capture"?"PDFMines_Captured":
       "PDFMines_Numbered";
     downloadToolBytes(bytes,`${base}_${new Date().toISOString().slice(0,10)}.pdf`);
     const kb=Math.round(bytes.length/1024);
