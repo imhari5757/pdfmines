@@ -47,7 +47,7 @@
       <div class="settings">
         <label>Page size<select id="pageSize"><option value="a4">A4</option><option value="letter">Letter</option><option value="original">Original</option></select></label>
         <label>Orientation<select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
-        <label>Image fit<select id="fitMode"><option value="stretch">Full stretch</option><option value="original">Original image size</option></select></label>
+        <label>Image fit<select id="fitMode"><option value="stretch">Full stretch</option><option value="original" selected>Original image size</option></select></label>
         <label>Quality<select id="quality"><option value="high">High</option><option value="medium">Medium</option><option value="small">Small file</option></select></label>
         <label>Image<select id="colorMode"><option value="color">Colour</option><option value="bw">Black &amp; White</option></select></label>
         <label>Target size
@@ -59,16 +59,6 @@
             </select>
           </div>
         </label>
-        <label>Target PDF size<select id="targetSize">
-          <option value="0">No target</option>
-          <option value="102400">≤ 100 KB</option>
-          <option value="204800">≤ 200 KB</option>
-          <option value="512000">≤ 500 KB</option>
-          <option value="1048576">≤ 1 MB</option>
-          <option value="2097152">≤ 2 MB</option>
-          <option value="5242880">≤ 5 MB</option>
-          <option value="10485760">≤ 10 MB</option>
-        </select></label>
       </div>
       <button id="createBtn" class="btn primary create">Create PDF <span>→</span></button>
       <div id="progressWrap" class="progress-wrap hidden"><div class="progress"><i id="progressBar"></i></div><small id="progressText">Preparing…</small></div>
