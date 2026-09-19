@@ -181,6 +181,11 @@ body.modal-open{overflow:hidden}
 @media(max-width:640px){.split-output-row{grid-template-columns:1fr}}
 
 /* Capture Images -> PDF */
+
+.upload-actions,.tool-upload-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px}
+.tool-upload-actions{justify-content:flex-start}
+.tool-upload-actions .hidden{display:none!important}
+@media(max-width:640px){.upload-actions,.tool-upload-actions{width:100%}.upload-actions .btn,.tool-upload-actions .btn{flex:1;min-width:145px}}
 .capture-options{display:grid;gap:14px;margin:16px 0 8px;border:1px solid #e7e9f0;border-radius:18px;padding:18px;background:#fff}
 .capture-header{display:flex;justify-content:space-between;gap:12px}
 .capture-subtitle{font-size:12px;color:#737b8b;margin-top:4px;line-height:1.45}
@@ -193,8 +198,6 @@ body.modal-open{overflow:hidden}
 .capture-editor-empty{padding:22px;text-align:center;border:1px dashed #d8ddeb;border-radius:14px;color:#7b8190;font-size:13px;background:#fafbff}
 .capture-editor{display:grid;gap:12px}
 .capture-editor-top{display:grid;gap:10px}
-.capture-editor-nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.capture-editor-nav .btn:disabled{opacity:.45;cursor:not-allowed}
 .capture-mode-row{display:flex;gap:18px;flex-wrap:wrap}
 .capture-mode-row label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:650;color:#4e5666;cursor:pointer}
 .capture-mode-row input{accent-color:#5b5ff0}

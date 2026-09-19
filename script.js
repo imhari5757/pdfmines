@@ -7,9 +7,11 @@ const status = document.querySelector(".status-dot");
 let files = [];
 
 const $ = id => document.getElementById(id);
+const mainCaptureBtn = $("mainCaptureBtn");
 
 $("startBtn").onclick = () => input.click();
 $("chooseBtn").onclick = e => { e.stopPropagation(); input.click(); };
+mainCaptureBtn?.addEventListener("click", e => { e.stopPropagation(); openCaptureFor("main"); });
 drop.addEventListener("click", e => { if (!e.target.closest("button")) input.click(); });
 input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
 
@@ -767,8 +769,22 @@ const TOOL_CONFIG = {
     accept:"application/pdf",
     multiple:false,
     action:"Add Page Numbers"
+  },
+  capture: {
+    title:"Scan documents",
+    desc:"Capture document pages with your camera, adjust borders, then add them to the current tool.",
+    accept:"image/jpeg,image/png,image/webp",
+    multiple:true,
+    action:"Add captured pages"
   }
 };
+
+let captureReturnTarget = null;
+
+function openCaptureFor(target){
+  captureReturnTarget = target;
+  openTool("capture");
+}
 
 function openTool(name){
   const cfg=TOOL_CONFIG[name];
@@ -781,6 +797,7 @@ function openTool(name){
   toolDrop.classList.toggle("hidden",name==="capture");
   toolFilesEl.classList.toggle("hidden",name==="capture");
   captureOptionsWrap?.classList.toggle("hidden",name!=="capture");
+  toolCapture?.classList.toggle("hidden",!(cfg.accept||"").includes("image"));
   toolTitle.textContent=cfg.title;
   toolDesc.textContent=cfg.desc;
   toolDropTitle.textContent=cfg.multiple ? "Choose files" : "Choose a file";
@@ -789,12 +806,14 @@ function openTool(name){
     : "Files are processed locally in your browser.";
   toolRun.textContent="";
   toolRun.append(cfg.action," →");
+  if(name==="capture") toolRun.textContent="Add captured pages →";
   toolStatus.textContent="";
   splitPagesWrap.classList.toggle("hidden",name!=="split");
   rotateAngleWrap.classList.toggle("hidden",name!=="rotate");
   if(name==="split") {
     document.querySelectorAll('input[name="splitOutput"]').forEach(r=>r.checked=(r.value==="single"));
   }
+  capturePdfOptions?.classList.toggle("hidden",name==="capture" && !!captureReturnTarget);
   numberOptionsWrap.classList.toggle("hidden",name!=="number");
   if(name==="number") {
     setNumberPosition("bottom-center");
@@ -805,6 +824,10 @@ function openTool(name){
     $("numberUnderline")?.classList.remove("active");
   }
   if(name==="capture") {
+    capturePdfOptions?.classList.toggle("hidden",!!captureReturnTarget);
+    toolTitle.textContent="Scan documents";
+    toolDesc.textContent="Capture pages like a scanning app, adjust borders, then add them directly to the current PDF tool.";
+    toolRun.textContent="Add captured pages →";
     captureItems=[]; captureIndex=0; renderCapturePages();
     captureEditor.classList.add("hidden"); captureEditorEmpty.classList.remove("hidden");
     stopCaptureCamera();
@@ -832,6 +855,7 @@ document.querySelectorAll(".tool-open").forEach(btn=>{
 $("toolModalClose").onclick=closeTool;
 document.querySelectorAll("[data-close-tool]").forEach(el=>el.onclick=closeTool);
 toolChoose.onclick=e=>{e.stopPropagation();toolInput.click();};
+toolCapture?.addEventListener("click",e=>{e.stopPropagation();openCaptureFor("tool");});
 toolDrop.addEventListener("click",e=>{
   if(!e.target.closest("button")) toolInput.click();
 });
@@ -1099,14 +1123,13 @@ const captureUploadInput = $("captureUploadInput");
 const captureEditorEmpty = $("captureEditorEmpty");
 const captureEditor = $("captureEditor");
 const captureEditorTitle = $("captureEditorTitle");
-const captureBackBtn = $("captureBackBtn");
-const captureRecaptureBtn = $("captureRecaptureBtn");
 const cropViewport = $("cropViewport");
 const cropImage = $("cropImage");
 const cropBox = $("cropBox");
 const cropInfo = $("captureCropInfo");
 const capturePagesEl = $("capturePages");
 const captureAutoAdjust = $("captureAutoAdjust");
+const capturePdfOptions = $("capturePdfOptions");
 const captureResetCrop = $("captureResetCrop");
 let captureItems = [];
 let captureIndex = 0;
@@ -1114,7 +1137,6 @@ let captureStream = null;
 let cropDrag = null;
 let cropRaf = 0;
 let cropPending = null;
-let recaptureMode = false;
 
 function stopCaptureCamera(){
   if(captureStream){
@@ -1244,8 +1266,6 @@ async function selectCapturePage(index){
   captureIndex=index;
   const item=captureItems[index];
   captureEditorTitle.textContent=`Page ${index+1} · ${item.file.name}`;
-  if(captureBackBtn) captureBackBtn.disabled=index<=0;
-  if(captureRecaptureBtn) captureRecaptureBtn.disabled=false;
   cropImage.src=item.dataUrl;
   cropImage.onload=()=>{renderCrop();};
   document.querySelectorAll(".capture-page-chip").forEach((el,i)=>el.classList.toggle("active",i===index));
@@ -1253,25 +1273,6 @@ async function selectCapturePage(index){
   if(radio) radio.checked=true;
   captureEditorEmpty.classList.add("hidden");
   captureEditor.classList.remove("hidden");
-}
-
-function goToPreviousCapture(){
-  if(captureIndex<=0) return;
-  selectCapturePage(captureIndex-1);
-}
-
-async function beginRecapture(){
-  if(!captureItems[captureIndex]) return;
-  recaptureMode=true;
-  if(!captureStream){
-    await startCaptureCamera();
-    if(!captureStream){
-      recaptureMode=false;
-      return;
-    }
-  }
-  toolStatus.textContent=`Ready to recapture Page ${captureIndex+1}. Capture a new photo to replace the current image.`;
-  captureVideo.scrollIntoView({behavior:"smooth",block:"center"});
 }
 
 async function addCaptureFiles(newFiles){
@@ -1302,27 +1303,7 @@ async function capturePhoto(){
   // Mirroring is deliberately not used for the rear/document camera.
   ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
-  const file=makeImageFile(blob,recaptureMode ? (captureItems[captureIndex]?.file.name || `Capture_${String(captureIndex+1).padStart(2,"0")}.jpg`) : `Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`);
-
-  if(recaptureMode && captureItems[captureIndex]){
-    const item=captureItems[captureIndex];
-    item.file=file;
-    item.dataUrl=await fileToDataUrlSafe(file);
-    try{
-      item.crop=await detectDocumentCrop(file);
-      item.auto=true;
-    }catch(_){
-      item.crop={l:0,t:0,r:1,b:1};
-      item.auto=false;
-    }
-    recaptureMode=false;
-    renderCapturePages();
-    await selectCapturePage(captureIndex);
-    toolStatus.textContent=`Page ${captureIndex+1} recaptured successfully.`;
-    return;
-  }
-
-  await addCaptureFiles([file]);
+  await addCaptureFiles([makeImageFile(blob,`Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`)]);
 }
 
 async function resetCurrentCrop(){
@@ -1342,10 +1323,8 @@ async function autoAdjustCurrentCrop(){
 }
 
 captureStartCamera?.addEventListener("click",startCaptureCamera);
-captureStopCamera?.addEventListener("click",()=>{recaptureMode=false;stopCaptureCamera();});
+captureStopCamera?.addEventListener("click",stopCaptureCamera);
 captureTakePhoto?.addEventListener("click",capturePhoto);
-captureBackBtn?.addEventListener("click",goToPreviousCapture);
-captureRecaptureBtn?.addEventListener("click",beginRecapture);
 captureUploadBtn?.addEventListener("click",()=>captureUploadInput.click());
 captureUploadInput?.addEventListener("change",async()=>{const fs=[...captureUploadInput.files];captureUploadInput.value="";await addCaptureFiles(fs);});
 captureAutoAdjust?.addEventListener("click",autoAdjustCurrentCrop);
@@ -1390,6 +1369,26 @@ const endCropDrag=e=>{if(cropDrag){cropDrag=null;cropPending=null;renderCrop();}
 cropBox?.addEventListener("pointerup",endCropDrag); cropBox?.addEventListener("pointercancel",endCropDrag);
 window.addEventListener("resize",()=>{if(activeTool==="capture") scheduleCropRender();});
 
+async function materializeCaptureFiles(){
+  if(!captureItems.length) throw new Error("Capture or add at least one image first.");
+  const out=[];
+  for(let i=0;i<captureItems.length;i++){
+    const item=captureItems[i];
+    const img=await imageFromFile(item.file);
+    const sw=img.naturalWidth, sh=img.naturalHeight;
+    const sx=Math.max(0,Math.floor(item.crop.l*sw)), sy=Math.max(0,Math.floor(item.crop.t*sh));
+    const ex=Math.min(sw,Math.ceil(item.crop.r*sw)), ey=Math.min(sh,Math.ceil(item.crop.b*sh));
+    const cw=Math.max(1,ex-sx), ch=Math.max(1,ey-sy);
+    const c=document.createElement("canvas"); c.width=cw; c.height=ch;
+    const ctx=c.getContext("2d"); ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+    ctx.drawImage(img,sx,sy,cw,ch,0,0,cw,ch);
+    const blob=await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error("Could not prepare captured image.")),"image/jpeg",.94));
+    out.push(makeImageFile(blob,`Scan_${String(i+1).padStart(2,"0")}.jpg`));
+    await new Promise(r=>setTimeout(r,0));
+  }
+  return out;
+}
+
 async function createCapturePdf(){
   if(!captureItems.length) throw new Error("Capture or add at least one image first.");
   const size=$("capturePageSize").value;
@@ -1422,6 +1421,22 @@ toolRun.onclick=async()=>{
   if(!activeTool) return;
   if(activeTool==="capture" && !captureItems.length){
     toolStatus.textContent="Capture or add at least one image first.";
+    return;
+  }
+  if(activeTool==="capture" && captureReturnTarget){
+    toolRun.disabled=true;
+    toolStatus.textContent="Preparing captured pages…";
+    try{
+      const captured=await materializeCaptureFiles();
+      const target=captureReturnTarget;
+      closeTool();
+      captureReturnTarget=null;
+      if(target==="main") addFiles(captured);
+      else if(target==="tool"){ toolFiles.push(...captured); renderToolFiles(); }
+      toolStatus.textContent="";
+    }catch(err){
+      toolStatus.textContent=err?.message||"Could not prepare captured pages.";
+    }finally{ toolRun.disabled=false; }
     return;
   }
   if(activeTool!=="capture" && !toolFiles.length){
