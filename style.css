@@ -220,3 +220,18 @@ body.modal-open{overflow:hidden}
 .capture-page-chip.active{border-color:#5b5ff0;background:#f5f5ff;box-shadow:0 0 0 2px rgba(91,95,240,.08)}
 .capture-pdf-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:640px){.capture-pdf-options{grid-template-columns:1fr}.crop-viewport{height:58vh;min-height:280px}.crop-controls span{margin-left:0;width:100%}}
+
+
+/* Capture review: show the captured image in a dedicated scanner-style interface. */
+.capture-review-title-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px}
+.capture-review-title-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.capture-review-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.capture-options.reviewing .capture-header,.capture-options.reviewing .capture-camera-card,.capture-options.reviewing .capture-upload-row,.capture-options.reviewing .capture-editor-empty,.capture-options.reviewing .capture-pdf-options{display:none!important}
+.capture-options.reviewing .capture-editor{position:fixed;z-index:10000;inset:0;background:#fff;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));overflow:auto;display:grid;grid-template-rows:auto auto minmax(260px,1fr) auto auto auto;gap:12px;border-radius:0}
+.capture-options.reviewing .crop-viewport{height:min(68vh,620px);min-height:300px}
+.capture-options.reviewing .capture-pages{padding-bottom:4px}
+.crop-handle{width:30px;height:30px}
+.crop-handle.nw{left:-15px;top:-15px}.crop-handle.n{top:-15px}.crop-handle.ne{right:-15px;top:-15px}
+.crop-handle.w{left:-15px}.crop-handle.e{right:-15px}
+.crop-handle.sw{left:-15px;bottom:-15px}.crop-handle.s{bottom:-15px}.crop-handle.se{right:-15px;bottom:-15px}
+@media(max-width:640px){.capture-review-title-row{grid-template-columns:auto 1fr auto;gap:6px}.capture-review-title-row .btn{padding:10px 9px;font-size:12px}.capture-options.reviewing .capture-editor{padding-left:12px;padding-right:12px}.capture-options.reviewing .crop-viewport{height:62vh;min-height:300px}.capture-review-actions{grid-template-columns:1fr}.crop-handle{width:32px;height:32px}}

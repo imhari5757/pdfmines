@@ -147,7 +147,11 @@
         <div id="captureEditorEmpty" class="capture-editor-empty">Capture or add a document to adjust its borders.</div>
         <div id="captureEditor" class="capture-editor hidden">
           <div class="capture-editor-top">
-            <b id="captureEditorTitle">Page 1</b>
+            <div class="capture-review-title-row">
+              <button type="button" id="captureReviewBack" class="btn secondary small">← Back</button>
+              <b id="captureEditorTitle">Page 1</b>
+              <button type="button" id="captureReviewRecapture" class="btn secondary small">↻ Recapture</button>
+            </div>
             <div class="capture-mode-row">
               <label><input type="radio" name="captureBorderMode" value="auto" checked> Automatic border adjustment</label>
               <label><input type="radio" name="captureBorderMode" value="manual"> Manual border adjustment</label>
@@ -174,6 +178,10 @@
             <button type="button" id="captureAutoAdjust" class="btn secondary small">✨ Auto-adjust border</button>
             <button type="button" id="captureResetCrop" class="btn secondary small">Reset border</button>
             <span id="captureCropInfo">Border: automatic</span>
+          </div>
+          <div class="capture-review-actions">
+            <button type="button" id="captureReviewAdd" class="btn primary">✓ Use this page</button>
+            <button type="button" id="captureReviewNext" class="btn secondary">＋ Capture next page</button>
           </div>
           <div class="capture-pages" id="capturePages"></div>
         </div>
@@ -272,6 +280,6 @@
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="script.js?v=26"></script>
+<script src="script.js?v=28"></script>
 </body>
 </html>

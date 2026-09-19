@@ -1133,12 +1133,27 @@ const capturePagesEl = $("capturePages");
 const captureAutoAdjust = $("captureAutoAdjust");
 const capturePdfOptions = $("capturePdfOptions");
 const captureResetCrop = $("captureResetCrop");
+const captureReviewBack = $("captureReviewBack");
+const captureReviewRecapture = $("captureReviewRecapture");
+const captureReviewAdd = $("captureReviewAdd");
+const captureReviewNext = $("captureReviewNext");
 let captureItems = [];
 let captureIndex = 0;
 let captureStream = null;
 let cropDrag = null;
 let cropRaf = 0;
 let cropPending = null;
+
+function openCaptureReview(){
+  captureOptionsWrap?.classList.add("reviewing");
+  captureEditor?.scrollIntoView({block:"start",behavior:"instant"});
+  setTimeout(()=>renderCrop(),0);
+}
+
+function closeCaptureReview(){
+  captureOptionsWrap?.classList.remove("reviewing");
+  setTimeout(()=>renderCrop(),0);
+}
 
 function stopCaptureCamera(){
   if(captureStream){
@@ -1186,20 +1201,18 @@ async function fileToDataUrlSafe(file){
 }
 
 function clampCrop(c){
-  // Keep the border elastic: each of the 8 handles can move independently.
-  // Only a very small safety minimum prevents the box from collapsing.
-  const min=0.006;
+  // Keep each edge independent. Never swap opposite edges while dragging:
+  // swapping makes a corner jump and is what causes the non-elastic feel.
+  const min=0.004;
   let l=Math.max(0,Math.min(1,c.l)), t=Math.max(0,Math.min(1,c.t));
   let r=Math.max(0,Math.min(1,c.r)), b=Math.max(0,Math.min(1,c.b));
-  if(r<l) [l,r]=[r,l];
-  if(b<t) [t,b]=[b,t];
   if(r-l<min){
-    const mid=(l+r)/2; l=Math.max(0,mid-min/2); r=Math.min(1,l+min);
-    if(r-l<min){r=Math.min(1,l+min);l=Math.max(0,r-min);}
+    if(c.r!==undefined && c.r<=c.l) r=Math.min(1,l+min);
+    else l=Math.max(0,r-min);
   }
   if(b-t<min){
-    const mid=(t+b)/2; t=Math.max(0,mid-min/2); b=Math.min(1,t+min);
-    if(b-t<min){b=Math.min(1,t+min);t=Math.max(0,b-min);}
+    if(c.b!==undefined && c.b<=c.t) b=Math.min(1,t+min);
+    else t=Math.max(0,b-min);
   }
   return {l,t,r,b};
 }
@@ -1312,10 +1325,31 @@ async function capturePhoto(){
   const canvas=document.createElement("canvas");
   canvas.width=captureVideo.videoWidth; canvas.height=captureVideo.videoHeight;
   const ctx=canvas.getContext("2d");
-  // Mirroring is deliberately not used for the rear/document camera.
   ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
   await addCaptureFiles([makeImageFile(blob,`Capture_${String(captureItems.length+1).padStart(2,"0")}.jpg`)]);
+  stopCaptureCamera();
+  openCaptureReview();
+}
+
+async function recaptureCurrentPage(){
+  if(!captureStream || !captureVideo.videoWidth || !captureItems[captureIndex]){
+    await startCaptureCamera();
+    return;
+  }
+  const canvas=document.createElement("canvas");
+  canvas.width=captureVideo.videoWidth; canvas.height=captureVideo.videoHeight;
+  const ctx=canvas.getContext("2d"); ctx.drawImage(captureVideo,0,0,canvas.width,canvas.height);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Camera capture failed.")),"image/jpeg",0.94));
+  const file=makeImageFile(blob,`Capture_${String(captureIndex+1).padStart(2,"0")}.jpg`);
+  const dataUrl=await fileToDataUrlSafe(file);
+  let crop={l:0,t:0,r:1,b:1}, auto=true;
+  try{crop=await detectDocumentCrop(file);}catch(_){auto=false;}
+  captureItems[captureIndex]={file,dataUrl,crop,auto};
+  renderCapturePages();
+  await selectCapturePage(captureIndex);
+  stopCaptureCamera();
+  openCaptureReview();
 }
 
 async function resetCurrentCrop(){
@@ -1341,6 +1375,10 @@ captureUploadBtn?.addEventListener("click",()=>captureUploadInput.click());
 captureUploadInput?.addEventListener("change",async()=>{const fs=[...captureUploadInput.files];captureUploadInput.value="";await addCaptureFiles(fs);});
 captureAutoAdjust?.addEventListener("click",autoAdjustCurrentCrop);
 captureResetCrop?.addEventListener("click",resetCurrentCrop);
+captureReviewBack?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});
+captureReviewRecapture?.addEventListener("click",async()=>{closeCaptureReview();await startCaptureCamera();});
+captureReviewAdd?.addEventListener("click",()=>{closeCaptureReview();renderCapturePages();});
+captureReviewNext?.addEventListener("click",()=>{closeCaptureReview();startCaptureCamera();});
 
 document.querySelectorAll('input[name="captureBorderMode"]').forEach(r=>r.addEventListener("change",async()=>{
   const item=captureItems[captureIndex]; if(!item) return;
@@ -1352,23 +1390,25 @@ function updateCropFromPointer(clientX,clientY){
   if(!cropDrag) return;
   const rect=getDisplayedImageRect(); if(!rect) return;
   const dx=(clientX-cropDrag.startX)/rect.w, dy=(clientY-cropDrag.startY)/rect.h;
-  const s=cropDrag.startCrop; let c={...s};
-  const h=cropDrag.handle;
-  if(h.includes("w")) c.l=s.l+dx;
-  if(h.includes("e")) c.r=s.r+dx;
-  if(h.includes("n")) c.t=s.t+dy;
-  if(h.includes("s")) c.b=s.b+dy;
-  if(h==="move"){
+  const s=cropDrag.startCrop; const h=cropDrag.handle;
+  let c={...s};
+  const min=0.004;
+
+  if(h!=="move") {
+    if(h.includes("w")) c.l=Math.max(0,Math.min(s.r-min,s.l+dx));
+    if(h.includes("e")) c.r=Math.min(1,Math.max(s.l+min,s.r+dx));
+    if(h.includes("n")) c.t=Math.max(0,Math.min(s.b-min,s.t+dy));
+    if(h.includes("s")) c.b=Math.min(1,Math.max(s.t+min,s.b+dy));
+  } else {
     const ww=s.r-s.l, hh=s.b-s.t;
     c.l=Math.max(0,Math.min(1-ww,s.l+dx)); c.r=c.l+ww;
     c.t=Math.max(0,Math.min(1-hh,s.t+dy)); c.b=c.t+hh;
   }
-  c=clampCrop(c);
-  const item=captureItems[captureIndex]; if(item){item.crop=c;item.auto=false;}
-  cropPending=c;
+  const item=captureItems[captureIndex];
+  if(item){item.crop=clampCrop(c);item.auto=false;}
+  cropPending=item?.crop || null;
   scheduleCropRender();
 }
-
 function beginCropDrag(e, handle){
   const item=captureItems[captureIndex];
   if(!item) return;
