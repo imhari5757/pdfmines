@@ -47,7 +47,28 @@
       <div class="settings">
         <label>Page size<select id="pageSize"><option value="a4">A4</option><option value="letter">Letter</option><option value="original">Original</option></select></label>
         <label>Orientation<select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+        <label>Image fit<select id="fitMode"><option value="stretch">Full stretch</option><option value="original">Original image size</option></select></label>
         <label>Quality<select id="quality"><option value="high">High</option><option value="medium">Medium</option><option value="small">Small file</option></select></label>
+        <label>Image<select id="colorMode"><option value="color">Colour</option><option value="bw">Black &amp; White</option></select></label>
+        <label>Target size
+          <div class="size-input">
+            <input id="targetSize" type="number" min="0" step="1" inputmode="decimal" placeholder="Size">
+            <select id="targetUnit" aria-label="Target size unit">
+              <option value="KB">KB</option>
+              <option value="MB">MB</option>
+            </select>
+          </div>
+        </label>
+        <label>Target PDF size<select id="targetSize">
+          <option value="0">No target</option>
+          <option value="102400">≤ 100 KB</option>
+          <option value="204800">≤ 200 KB</option>
+          <option value="512000">≤ 500 KB</option>
+          <option value="1048576">≤ 1 MB</option>
+          <option value="2097152">≤ 2 MB</option>
+          <option value="5242880">≤ 5 MB</option>
+          <option value="10485760">≤ 10 MB</option>
+        </select></label>
       </div>
       <button id="createBtn" class="btn primary create">Create PDF <span>→</span></button>
       <div id="progressWrap" class="progress-wrap hidden"><div class="progress"><i id="progressBar"></i></div><small id="progressText">Preparing…</small></div>
@@ -74,6 +95,6 @@
 
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
-<script src="script.js?v=6"></script>
+<script src="script.js?v=7"></script>
 </body>
 </html>
