@@ -1,18 +1,16 @@
 # PDFMines
 
-Fast, privacy-first PDF tools designed for browser-side processing.
+Client-side Images → PDF prototype for GitHub Pages.
 
-## Current tool
-- Images → PDF (JPG/JPEG/PNG/WEBP)
-- Multiple images
-- A4 / Letter / Original page size
-- Portrait / Landscape
-- High / Medium / Small file quality
-- Drag & drop and page removal
-- No PDF library or third-party runtime dependency required for image-to-PDF
+## Current build
+- Browser-only image processing; selected files are not uploaded to a PDFMines server.
+- Memory-efficient image conversion for mobile browsers.
+- JPG/JPEG, PNG and WEBP input.
+- A4, Letter and Original page sizes.
+- Portrait/Landscape.
+- High, Medium and Small file quality.
+- 5 mm white margin with aspect ratio preserved.
+- Multi-page PDF download.
 
 ## GitHub Pages
-Upload the files to the repository root and enable GitHub Pages from the `main` branch and `/ (root)`.
-
-## Privacy note
-The current Images → PDF tool processes selected images in the browser and does not upload them to a PDFMines server.
+Upload the files in this folder to the repository root. The `index.html` uses `script.js?v=3` to avoid stale browser caching after deployment.

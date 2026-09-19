@@ -6,8 +6,10 @@ const fileCount = document.getElementById("fileCount");
 const status = document.querySelector(".status-dot");
 let files = [];
 
-document.getElementById("startBtn").onclick = () => input.click();
-document.getElementById("chooseBtn").onclick = e => { e.stopPropagation(); input.click(); };
+const $ = id => document.getElementById(id);
+
+$("startBtn").onclick = () => input.click();
+$("chooseBtn").onclick = e => { e.stopPropagation(); input.click(); };
 drop.addEventListener("click", e => { if (!e.target.closest("button")) input.click(); });
 input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
 
@@ -20,139 +22,183 @@ input.addEventListener("change", () => { addFiles([...input.files]); input.value
 drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
 
 function addFiles(newFiles){
-  const valid = newFiles.filter(f => /^image\/(jpeg|png|webp)$/.test(f.type));
+  const valid = newFiles.filter(f => /^(image\/jpeg|image\/png|image\/webp)$/i.test(f.type));
   files.push(...valid);
   render();
 }
 
 function render(){
-  fileArea.classList.toggle("hidden", files.length===0);
-  fileCount.textContent = `${files.length} page${files.length===1?"":"s"}`;
+  fileArea.classList.toggle("hidden", files.length === 0);
+  fileCount.textContent = `${files.length} page${files.length === 1 ? "" : "s"}`;
   thumbs.innerHTML = "";
-  files.forEach((file,i)=>{
-    const div=document.createElement("div"); div.className="thumb";
-    const img=document.createElement("img"); img.src=URL.createObjectURL(file);
-    const num=document.createElement("span"); num.className="num"; num.textContent=String(i+1).padStart(2,"0");
-    const del=document.createElement("button"); del.textContent="×"; del.title="Remove";
-    del.onclick=()=>{files.splice(i,1);render()};
-    div.append(img,num,del); thumbs.appendChild(div);
+
+  files.forEach((file, i) => {
+    const div = document.createElement("div");
+    div.className = "thumb";
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    const num = document.createElement("span");
+    num.className = "num";
+    num.textContent = String(i + 1).padStart(2, "0");
+    const del = document.createElement("button");
+    del.textContent = "×";
+    del.title = "Remove";
+    del.onclick = () => { files.splice(i, 1); render(); };
+    div.append(img, num, del);
+    thumbs.appendChild(div);
   });
   status.textContent = "● Ready";
 }
 
-document.getElementById("clearBtn").onclick=()=>{files=[];input.value="";render()};
+$("clearBtn").onclick = () => { files = []; input.value = ""; render(); };
 
-document.getElementById("createBtn").onclick = async ()=>{
-  if(!files.length) return;
+$("createBtn").onclick = async () => {
+  if (!files.length) return;
 
-  const size=document.getElementById("pageSize").value;
-  const orientation=document.getElementById("orientation").value;
-  const quality=document.getElementById("quality").value;
-  const wrap=document.getElementById("progressWrap");
-  const bar=document.getElementById("progressBar");
-  const txt=document.getElementById("progressText");
-  const button=document.getElementById("createBtn");
+  const size = $("pageSize").value;
+  const orientation = $("orientation").value;
+  const quality = $("quality").value;
+  const wrap = $("progressWrap");
+  const bar = $("progressBar");
+  const txt = $("progressText");
+  const button = $("createBtn");
 
   button.disabled = true;
   wrap.classList.remove("hidden");
   bar.style.width = "0%";
+  status.textContent = "● Working…";
 
   try {
     const pages = [];
 
-    for(let i=0;i<files.length;i++){
-      txt.textContent=`Preparing page ${i+1} of ${files.length}…`;
-      const data=await readImage(files[i],quality);
-      const img=await decodeImage(data);
+    for (let i = 0; i < files.length; i++) {
+      txt.textContent = `Preparing page ${i + 1} of ${files.length}…`;
+      const image = await prepareImage(files[i], quality);
 
       let pageWmm, pageHmm;
-      if(size === "letter") {
+      if (size === "letter") {
         pageWmm = 215.9; pageHmm = 279.4;
-      } else if(size === "original") {
+      } else if (size === "original") {
+        // Keep a practical physical page size based on the image aspect ratio.
         pageWmm = 210;
-        pageHmm = pageWmm * (img.height / img.width);
+        pageHmm = pageWmm * (image.height / image.width);
       } else {
         pageWmm = 210; pageHmm = 297;
       }
 
-      if(orientation === "landscape" && size !== "original") {
+      if (orientation === "landscape" && size !== "original") {
         [pageWmm, pageHmm] = [pageHmm, pageWmm];
       }
 
-      pages.push({ data, width: img.width, height: img.height, pageWmm, pageHmm });
-      bar.style.width=((i+1)/files.length*65)+"%";
-      await new Promise(r=>setTimeout(r,0));
+      pages.push({
+        jpeg: image.jpeg,
+        width: image.width,
+        height: image.height,
+        pageWmm,
+        pageHmm
+      });
+
+      bar.style.width = `${Math.round((i + 1) / files.length * 65)}%`;
+      await new Promise(r => setTimeout(r, 0));
     }
 
     txt.textContent = "Building PDF…";
     const pdfBytes = buildImagePdf(pages);
     bar.style.width = "90%";
-    downloadBytes(pdfBytes, `PDFMines_${new Date().toISOString().slice(0,10)}.pdf`);
+    downloadBytes(pdfBytes, `PDFMines_${new Date().toISOString().slice(0, 10)}.pdf`);
     bar.style.width = "100%";
-    txt.textContent="PDF ready ✓";
+    txt.textContent = "PDF ready ✓";
+    status.textContent = "● PDF ready";
   } catch (err) {
-    console.error(err);
-    txt.textContent="Could not create PDF";
-    alert("Could not create the PDF. Please try again with JPG/PNG/WEBP images.");
+    console.error("PDFMines PDF error:", err);
+    txt.textContent = "Could not create PDF";
+    status.textContent = "● Error";
+    // Show the real error during testing; this makes future browser issues diagnosable.
+    alert(`Could not create the PDF.\n\n${err && err.message ? err.message : err}`);
   } finally {
     button.disabled = false;
   }
 };
 
-function readImage(file, quality){
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onerror=()=>reject(reader.error || new Error("Could not read image"));
-    reader.onload=()=>{
-      const img=new Image();
-      img.onerror=()=>reject(new Error("Could not decode image"));
-      img.onload=()=>{
-        const max=quality==="small"?1800:quality==="medium"?2600:3600;
-        const scale=Math.min(1,max/Math.max(img.width,img.height));
-        const c=document.createElement("canvas");
-        c.width=Math.max(1,Math.round(img.width*scale));
-        c.height=Math.max(1,Math.round(img.height*scale));
-        const ctx=c.getContext("2d", {alpha:false});
-        ctx.fillStyle="#fff";
-        ctx.fillRect(0,0,c.width,c.height);
-        ctx.drawImage(img,0,0,c.width,c.height);
-        resolve(c.toDataURL("image/jpeg",quality==="small"?.72:quality==="medium"?.84:.92));
-      };
-      img.src=reader.result;
+// Memory-efficient image preparation for phones:
+// - avoids FileReader/base64 duplication
+// - decodes the source once
+// - creates one JPEG Blob/Uint8Array for the PDF
+async function prepareImage(file, quality) {
+  const max = quality === "small" ? 1600 : quality === "medium" ? 2400 : 3000;
+  const jpegQuality = quality === "small" ? 0.72 : quality === "medium" ? 0.84 : 0.90;
+
+  const img = await loadImage(file);
+  const sourceW = img.naturalWidth || img.width;
+  const sourceH = img.naturalHeight || img.height;
+  if (!sourceW || !sourceH) throw new Error("Image has invalid dimensions");
+
+  const scale = Math.min(1, max / Math.max(sourceW, sourceH));
+  const width = Math.max(1, Math.round(sourceW * scale));
+  const height = Math.max(1, Math.round(sourceH * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) throw new Error("Your browser could not create an image canvas");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const blob = await canvasToBlob(canvas, "image/jpeg", jpegQuality);
+  const jpeg = new Uint8Array(await blob.arrayBuffer());
+
+  // Release canvas memory as soon as the JPEG bytes are created.
+  canvas.width = 1;
+  canvas.height = 1;
+  if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+
+  return { jpeg, width, height };
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not decode this image"));
     };
-    reader.readAsDataURL(file);
+    img.src = url;
   });
 }
 
-function decodeImage(dataUrl){
-  return new Promise((resolve,reject)=>{
-    const img=new Image();
-    img.onload=()=>resolve(img);
-    img.onerror=()=>reject(new Error("Could not decode converted image"));
-    img.src=dataUrl;
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error("Browser could not convert the image"));
+    }, type, quality);
   });
 }
 
-// Small, dependency-free PDF writer for JPEG images.
-// The browser converts PNG/WEBP to JPEG first, so the resulting PDF needs no external library.
-function buildImagePdf(pages){
-  const objects=[];
-  const pageRefs=[];
-  const pageWmmToPt = mm => mm * 72 / 25.4;
+// Dependency-free PDF writer. JPEG bytes are embedded directly, so no CDN/library is required.
+function buildImagePdf(pages) {
+  if (!pages.length) throw new Error("No pages to add");
 
-  // Object 1: Catalog; object 2: Pages tree. Their page/image object numbers are filled below.
-  objects.push(null);
-  objects.push(null);
+  const objects = [null, null];
+  const pageRefs = [];
+  const mmToPt = mm => mm * 72 / 25.4;
 
   for (const page of pages) {
     const imageObj = objects.length + 1;
     const contentObj = imageObj + 1;
     const pageObj = imageObj + 2;
 
-    const jpeg = dataUrlToBytes(page.data);
-    const pageW = pageWmmToPt(page.pageWmm);
-    const pageH = pageWmmToPt(page.pageHmm);
-    const margin = pageWmmToPt(5);
+    const pageW = mmToPt(page.pageWmm);
+    const pageH = mmToPt(page.pageHmm);
+    const margin = mmToPt(5);
     const maxW = Math.max(1, pageW - margin * 2);
     const maxH = Math.max(1, pageH - margin * 2);
     const scale = Math.min(maxW / page.width, maxH / page.height);
@@ -162,10 +208,11 @@ function buildImagePdf(pages){
     const y = (pageH - drawH) / 2;
 
     const content = `q\n${fmt(drawW)} 0 0 ${fmt(drawH)} ${fmt(x)} ${fmt(y)} cm\n/Im1 Do\nQ\n`;
+
     objects.push({
       type: "binary",
-      header: `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
-      data: jpeg,
+      header: `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.jpeg.length} >>\nstream\n`,
+      data: page.jpeg,
       footer: `\nendstream`
     });
     objects.push({
@@ -180,55 +227,62 @@ function buildImagePdf(pages){
   }
 
   objects[0] = { type: "text", data: `<< /Type /Catalog /Pages 2 0 R >>` };
-  objects[1] = { type: "text", data: `<< /Type /Pages /Kids [${pageRefs.map(n=>`${n} 0 R`).join(" ")}] /Count ${pageRefs.length} >>` };
+  objects[1] = { type: "text", data: `<< /Type /Pages /Kids [${pageRefs.map(n => `${n} 0 R`).join(" ")}] /Count ${pageRefs.length} >>` };
 
-  const chunks=[];
-  const offsets=[0];
-  let offset=0;
-  const pushText = text => { const bytes=utf8Bytes(text); chunks.push(bytes); offset += bytes.length; };
-  const pushBytes = bytes => { chunks.push(bytes); offset += bytes.length; };
+  const chunks = [];
+  const offsets = [0];
+  let offset = 0;
+  const pushText = text => {
+    const bytes = utf8Bytes(text);
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const pushBytes = bytes => {
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
 
   pushText("%PDF-1.4\n%\xFF\xFF\xFF\xFF\n");
-  for(let i=0;i<objects.length;i++){
+  for (let i = 0; i < objects.length; i++) {
     offsets.push(offset);
-    pushText(`${i+1} 0 obj\n`);
-    const obj=objects[i];
-    if(obj.type === "binary"){
-      pushText(obj.header); pushBytes(obj.data); pushText(obj.footer + "\nendobj\n");
+    pushText(`${i + 1} 0 obj\n`);
+    const obj = objects[i];
+    if (obj.type === "binary") {
+      pushText(obj.header);
+      pushBytes(obj.data);
+      pushText(obj.footer + "\nendobj\n");
     } else {
       pushText(obj.data + "\nendobj\n");
     }
   }
-  const xrefOffset=offset;
-  pushText(`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`);
-  for(let i=1;i<offsets.length;i++) pushText(`${String(offsets[i]).padStart(10,"0")} 00000 n \n`);
-  pushText(`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  const xrefOffset = offset;
+  pushText(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
+  for (let i = 1; i < offsets.length; i++) {
+    pushText(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
+  }
+  pushText(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
 
   return concatBytes(chunks);
 }
 
-function dataUrlToBytes(dataUrl){
-  const base64=dataUrl.split(",")[1];
-  const bin=atob(base64);
-  const bytes=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return bytes;
-}
-
-function utf8Bytes(text){ return new TextEncoder().encode(text); }
-function fmt(n){ return Number(n.toFixed(3)).toString(); }
-function concatBytes(chunks){
-  const total=chunks.reduce((n,c)=>n+c.length,0);
-  const out=new Uint8Array(total);
-  let p=0;
-  for(const c of chunks){ out.set(c,p); p+=c.length; }
+function utf8Bytes(text) { return new TextEncoder().encode(text); }
+function fmt(n) { return Number(n.toFixed(3)).toString(); }
+function concatBytes(chunks) {
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
   return out;
 }
-function downloadBytes(bytes, filename){
-  const blob=new Blob([bytes], {type:"application/pdf"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+function downloadBytes(bytes, filename) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
