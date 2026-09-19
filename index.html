@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="PDFMines — fast, private PDF tools.">
+<title>PDFMines — Fast PDF Tools</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#"><span>PDF</span>Mines</a>
+  <nav>
+    <a href="#tools">Tools</a><a href="#privacy">Privacy</a><a href="#about">About</a>
+  </nav>
+  <div class="privacy-pill">🔒 Files stay in your browser</div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="hero-copy">
+    <div class="eyebrow">FAST · PRIVATE · SIMPLE</div>
+    <h1>Your files.<br><em>One beautiful PDF.</em></h1>
+    <p>Convert photos, combine PDFs and organize documents in seconds — without sending your files to a server.</p>
+    <div class="hero-actions">
+      <button class="btn primary" id="startBtn">＋ Add Photos</button>
+      <a class="btn secondary" href="#tools">Explore tools</a>
+    </div>
+    <div class="trust"><span>✓ No account</span><span>✓ No watermark</span><span>✓ Browser processing</span></div>
+  </div>
+
+  <section class="builder" aria-label="Images to PDF">
+    <div class="builder-top">
+      <div><small>PDFMines Studio</small><h2>Images → PDF</h2></div>
+      <span class="status-dot">● Ready</span>
+    </div>
+    <div id="dropZone" class="drop-zone">
+      <div class="upload-icon">↑</div>
+      <h3>Drop photos here</h3>
+      <p>JPG, JPEG, PNG or WEBP · Multiple files supported</p>
+      <button class="btn primary small" id="chooseBtn">Choose photos</button>
+      <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+    </div>
+    <div id="fileArea" class="file-area hidden">
+      <div class="file-head"><b id="fileCount">0 pages</b><button id="clearBtn" class="text-btn">Clear all</button></div>
+      <div id="thumbs" class="thumbs"></div>
+      <div class="settings">
+        <label>Page size<select id="pageSize"><option value="a4">A4</option><option value="letter">Letter</option><option value="original">Original</option></select></label>
+        <label>Orientation<select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+        <label>Quality<select id="quality"><option value="high">High</option><option value="medium">Medium</option><option value="small">Small file</option></select></label>
+      </div>
+      <button id="createBtn" class="btn primary create">Create PDF <span>→</span></button>
+      <div id="progressWrap" class="progress-wrap hidden"><div class="progress"><i id="progressBar"></i></div><small id="progressText">Preparing…</small></div>
+    </div>
+  </section>
+</section>
+
+<section id="tools" class="tools">
+  <div class="section-head"><div><div class="eyebrow">THE TOOLBOX</div><h2>Everything you need for PDFs.</h2></div><p>Start simple. Go further when you need to.</p></div>
+  <div class="tool-grid">
+    <article class="tool-card active"><div class="tool-icon">🖼️</div><h3>Images → PDF</h3><p>Turn photos into a clean, ordered PDF.</p><button onclick="document.getElementById('startBtn').click()">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">📑</div><h3>Merge PDF</h3><p>Combine multiple PDFs into one document.</p><button class="coming">Coming next</button></article>
+    <article class="tool-card"><div class="tool-icon">🔗</div><h3>Mix & Combine</h3><p>Combine images and PDFs in one file.</p><button class="coming">Coming next</button></article>
+    <article class="tool-card"><div class="tool-icon">🗜️</div><h3>Compress PDF</h3><p>Reduce document size for sharing.</p><button class="coming">Coming next</button></article>
+    <article class="tool-card"><div class="tool-icon">✂️</div><h3>Split PDF</h3><p>Extract selected pages into new files.</p><button class="coming">Coming next</button></article>
+    <article class="tool-card"><div class="tool-icon">🔄</div><h3>Rotate Pages</h3><p>Fix orientation with a single click.</p><button class="coming">Coming next</button></article>
+  </div>
+</section>
+
+<section id="privacy" class="privacy">
+  <div class="privacy-card"><div class="shield">🛡️</div><div><div class="eyebrow">PRIVACY FIRST</div><h2>Documents stay on your device.</h2><p>PDFMines is designed so the image-to-PDF conversion happens inside your browser. This version does not upload your selected images to a PDFMines server.</p></div></div>
+</section>
+</main>
+
+<footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
