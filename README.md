@@ -1,13 +1,12 @@
-# PDFMines v50
+# PDFMines v51
 
-Responsive JPG/PNG/WEBP to PDF preview with mobile-friendly reordering.
+JPG/PNG/WEBP to PDF responsive preview and reorder update.
 
 - Mobile: 1 × N
 - Tablet: 2 × N
 - Desktop: 3 × N
 - Compact preview cards
-- Dedicated mobile drag handle
-- Edge auto-scroll while reordering
-- Cached local preview URLs with FileReader fallback
-- Native image context actions disabled
-- Camera feature removed
+- Dedicated reorder handle on touch devices
+- Edge auto-scroll while reordering on touch and desktop
+- Browser image context-menu protection
+- Client-side file processing

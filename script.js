@@ -50,11 +50,74 @@ function addFiles(newFiles){
 }
 
 let desktopDragIndex = null;
+let desktopDragPoint = {x:0,y:0,active:false,autoScrollFrame:null};
 let touchDrag = {
   active:false, startIndex:-1, el:null, ghost:null,
   hoverIndex:-1, lastX:0, lastY:0, pointerId:null,
   startX:0, startY:0, autoScrollFrame:null
 };
+
+function getScrollElement(){
+  return document.scrollingElement || document.documentElement || document.body;
+}
+
+function scrollPageBy(delta){
+  if(!delta) return false;
+  const scroller=getScrollElement();
+  const before=scroller.scrollTop;
+  scroller.scrollTop=before+delta;
+  if(scroller.scrollTop!==before) return true;
+
+  const y=window.scrollY;
+  window.scrollTo(0,y+delta);
+  return window.scrollY!==y;
+}
+
+function edgeScrollDelta(y, viewportHeight){
+  const edge=Math.min(170,Math.max(90,viewportHeight*0.20));
+  const maxSpeed=Math.max(18,Math.min(42,viewportHeight*0.055));
+  if(y<edge){
+    const ratio=Math.min(1,(edge-y)/edge);
+    return -Math.max(3,maxSpeed*ratio*ratio);
+  }
+  if(y>viewportHeight-edge){
+    const ratio=Math.min(1,(y-(viewportHeight-edge))/edge);
+    return Math.max(3,maxSpeed*ratio*ratio);
+  }
+  return 0;
+}
+
+function runDesktopAutoScroll(){
+  if(!desktopDragPoint.active){
+    desktopDragPoint.autoScrollFrame=null;
+    return;
+  }
+  const h=window.innerHeight || document.documentElement.clientHeight;
+  const delta=edgeScrollDelta(desktopDragPoint.y,h);
+  if(delta) scrollPageBy(delta);
+  desktopDragPoint.autoScrollFrame=requestAnimationFrame(runDesktopAutoScroll);
+}
+
+function startDesktopAutoScroll(){
+  if(desktopDragPoint.autoScrollFrame===null){
+    desktopDragPoint.autoScrollFrame=requestAnimationFrame(runDesktopAutoScroll);
+  }
+}
+
+function stopDesktopAutoScroll(){
+  desktopDragPoint.active=false;
+  if(desktopDragPoint.autoScrollFrame!==null){
+    cancelAnimationFrame(desktopDragPoint.autoScrollFrame);
+    desktopDragPoint.autoScrollFrame=null;
+  }
+}
+
+function updateDesktopDragPoint(e){
+  desktopDragPoint.x=e.clientX;
+  desktopDragPoint.y=e.clientY;
+  desktopDragPoint.active=true;
+  startDesktopAutoScroll();
+}
 
 function stopTouchAutoScroll(){
   if(touchDrag.autoScrollFrame !== null){
@@ -69,30 +132,10 @@ function runTouchAutoScroll(){
     return;
   }
 
-  const viewportHeight=window.innerHeight;
-  const edge=Math.min(150,Math.max(72,viewportHeight*0.16));
-  const y=touchDrag.lastY;
-  let delta=0;
-
-  if(y<edge){
-    const ratio=(edge-y)/edge;
-    delta=-Math.min(28,4+ratio*24);
-  }else if(y>viewportHeight-edge){
-    const ratio=(y-(viewportHeight-edge))/edge;
-    delta=Math.min(28,4+ratio*24);
-  }
-
-  if(delta!==0){
-    const before=window.scrollY;
-    window.scrollBy({top:delta,left:0,behavior:"instant"});
-
-    if(window.scrollY===before){
-      const root=document.documentElement;
-      const body=document.body;
-      root.scrollTop+=delta;
-      body.scrollTop+=delta;
-    }
-
+  const h=window.innerHeight || document.documentElement.clientHeight;
+  const delta=edgeScrollDelta(touchDrag.lastY,h);
+  if(delta){
+    scrollPageBy(delta);
     updateTouchGhost(touchDrag.lastX,touchDrag.lastY);
     touchDrag.hoverIndex=findTouchHoverIndex(touchDrag.lastX,touchDrag.lastY);
     showTouchDropTarget(touchDrag.hoverIndex);
@@ -289,11 +332,13 @@ function render(){
 
     if(!coarsePointer) div.addEventListener("dragend", () => {
       desktopDragIndex = null;
+      stopDesktopAutoScroll();
       [...thumbs.children].forEach(el => el.classList.remove("dragging","drag-over"));
     });
 
     if(!coarsePointer) div.addEventListener("dragover", e => {
       e.preventDefault();
+      updateDesktopDragPoint(e);
       if (desktopDragIndex === null || desktopDragIndex === i) return;
       e.dataTransfer.dropEffect = "move";
       [...thumbs.children].forEach(el => el.classList.remove("drag-over"));
@@ -401,6 +446,21 @@ function render(){
 
   status.textContent = "● Ready";
 }
+
+
+document.addEventListener("dragover", e => {
+  if(desktopDragIndex===null) return;
+  updateDesktopDragPoint(e);
+});
+
+document.addEventListener("drop", () => {
+  if(desktopDragIndex!==null) stopDesktopAutoScroll();
+});
+
+window.addEventListener("blur", () => {
+  stopDesktopAutoScroll();
+  if(touchDrag.active) resetTouchDrag();
+});
 
 $("clearBtn").onclick = () => {
   files.forEach(file=>{ if(file.__previewUrl){ try{URL.revokeObjectURL(file.__previewUrl);}catch(_){} file.__previewUrl=null; } });
