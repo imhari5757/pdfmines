@@ -1,4 +1,4 @@
-// PDFMines v48 — compact responsive thumbnail cards
+// PDFMines v50 — compact responsive thumbnail cards
 const $ = id => document.getElementById(id);
 const input = $("imageInput");
 const drop = $("dropZone");
@@ -40,6 +40,11 @@ function addFiles(newFiles){
     alert("PDFMines could not recognize the selected image.\n\nPlease choose JPG, JPEG, PNG or WEBP.");
     return;
   }
+  valid.forEach(file=>{
+    if(!file.__previewUrl){
+      try{ file.__previewUrl=URL.createObjectURL(file); }catch(_){ file.__previewUrl=null; }
+    }
+  });
   files.push(...valid);
   render();
 }
@@ -65,23 +70,28 @@ function runTouchAutoScroll(){
   }
 
   const viewportHeight=window.innerHeight;
-  const edge=Math.min(180,Math.max(88,viewportHeight*0.18));
+  const edge=Math.min(150,Math.max(72,viewportHeight*0.16));
   const y=touchDrag.lastY;
   let delta=0;
 
   if(y<edge){
     const ratio=(edge-y)/edge;
-    delta=-Math.max(2,Math.min(22,2+ratio*20));
+    delta=-Math.min(28,4+ratio*24);
   }else if(y>viewportHeight-edge){
     const ratio=(y-(viewportHeight-edge))/edge;
-    delta=Math.max(2,Math.min(22,2+ratio*20));
+    delta=Math.min(28,4+ratio*24);
   }
 
   if(delta!==0){
-    const scroller=document.scrollingElement||document.documentElement;
-    const before=scroller.scrollTop;
-    scroller.scrollTop=before+delta;
-    if(scroller.scrollTop===before) window.scrollBy(0,delta);
+    const before=window.scrollY;
+    window.scrollBy({top:delta,left:0,behavior:"instant"});
+
+    if(window.scrollY===before){
+      const root=document.documentElement;
+      const body=document.body;
+      root.scrollTop+=delta;
+      body.scrollTop+=delta;
+    }
 
     updateTouchGhost(touchDrag.lastX,touchDrag.lastY);
     touchDrag.hoverIndex=findTouchHoverIndex(touchDrag.lastX,touchDrag.lastY);
@@ -210,22 +220,37 @@ function render(){
     img.alt = `Page ${i + 1} preview`;
     img.classList.add("preview-loading");
 
-    // Use a data URL for thumbnails instead of a blob URL. This is slightly
-    // more work once, but is much more reliable on Android Chrome and desktop
-    // when several images are added/re-rendered quickly.
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (!img.isConnected) return;
-      img.src = reader.result;
-      img.classList.remove("preview-loading");
-    };
-    reader.onerror = () => {
+    const showPreviewError = () => {
       if (!img.isConnected) return;
       img.classList.remove("preview-loading");
       img.classList.add("preview-error");
       img.alt = "Preview unavailable";
     };
-    reader.readAsDataURL(file);
+
+    const loadFromFileReader = () => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (!img.isConnected) return;
+        img.src = reader.result;
+        img.classList.remove("preview-loading");
+      };
+      reader.onerror = showPreviewError;
+      try{ reader.readAsDataURL(file); }catch(_){ showPreviewError(); }
+    };
+
+    if(file.__previewUrl){
+      img.onload = () => {
+        img.classList.remove("preview-loading");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(file.__previewUrl);
+        file.__previewUrl = null;
+        loadFromFileReader();
+      };
+      img.src = file.__previewUrl;
+    }else{
+      loadFromFileReader();
+    }
 
     const num = document.createElement("span");
     num.className = "num";
@@ -241,7 +266,8 @@ function render(){
     del.title = "Remove";
     del.onclick = e => {
       e.stopPropagation();
-      files.splice(i, 1);
+      const removed=files.splice(i, 1)[0];
+      if(removed?.__previewUrl){ try{URL.revokeObjectURL(removed.__previewUrl);}catch(_){} removed.__previewUrl=null; }
       render();
     };
 
@@ -376,7 +402,12 @@ function render(){
   status.textContent = "● Ready";
 }
 
-$("clearBtn").onclick = () => { files = []; input.value = ""; render(); };
+$("clearBtn").onclick = () => {
+  files.forEach(file=>{ if(file.__previewUrl){ try{URL.revokeObjectURL(file.__previewUrl);}catch(_){} file.__previewUrl=null; } });
+  files = [];
+  input.value = "";
+  render();
+};
 
 function updatePdfImageFormatUI(){
   const isPng=pdfImageFormat?.value==="png";
