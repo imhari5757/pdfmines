@@ -1,15 +1,11 @@
-# PDFMines v44 — Responsive JPG to PDF preview
+# PDFMines v46
 
-Based on PDFMines v43.
+JPG/PNG/WEBP to PDF responsive preview update.
 
-## Preview/reorder changes
-- Responsive preview matrix:
-  - Mobile: 1 × N
-  - Tablet: 2 × N
-  - Desktop: 3 × N
-- Larger thumbnails for easier visual identification.
-- Mobile vertical scrolling is preserved.
-- Mobile reordering starts only after a deliberate 360 ms long-press followed by movement.
-- Native HTML5 drag remains for fine-pointer desktop devices.
-- Existing PDF creation, quality, target-size, colour/B&W, ordering, and other tools are preserved.
-- Camera capture is not included.
+- Mobile: 1 x N
+- Tablet: 2 x N
+- Desktop: 3 x N
+- Compact image-sized preview cards instead of full-width cards
+- Smaller thumbnails to reduce scrolling for large page counts
+- Keeps native image context-menu protection and long-press reorder behavior
+- Camera feature remains removed

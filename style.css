@@ -95,31 +95,40 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
 }
 .thumb{
   min-width:0 !important;
-  width:100% !important;
-  height:190px !important;
+  width:max-content !important;
+  max-width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
   box-sizing:border-box;
   border:1px solid var(--line);
-  border-radius:16px;
+  border-radius:14px;
   background:#f7f8fb;
   position:relative;
   overflow:hidden;
   cursor:grab;
+  justify-self:center;
+  padding:6px;
 }
 .thumb img{
   display:block !important;
-  width:100% !important;
-  height:100% !important;
+  width:auto !important;
+  height:155px !important;
+  max-width:100% !important;
   object-fit:contain !important;
   background:#f7f8fb;
+  border-radius:8px;
 }
 @media (max-width:850px){
-  .thumbs{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:14px !important;}
-  .thumb{height:205px !important;}
+  .thumbs{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:12px !important;}
+  .thumb{border-radius:13px;}
+  .thumb img{height:145px !important;}
 }
 @media (max-width:520px){
-  .thumbs{grid-template-columns:1fr !important;gap:14px !important;}
-  .thumb{height:230px !important;border-radius:18px;}
+  .thumbs{grid-template-columns:1fr !important;gap:12px !important;}
+  .thumb{border-radius:14px;}
+  .thumb img{height:150px !important;}
 }
+
 
 /* On touch devices, normal vertical swiping should scroll the page.
    Reordering begins only after a deliberate long-press + move. */
@@ -273,3 +282,15 @@ body.modal-open{overflow:hidden}
 /* Mobile-safe file picker: keep the input programmatically/label accessible without affecting layout. */
 #imageInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 #chooseBtn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+
+
+/* Mobile: thumbnails are draggable cards, not browser image controls. */
+.thumb, .thumb img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.thumb img {
+  pointer-events: none !important;
+  -webkit-user-drag: none !important;
+}

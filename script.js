@@ -1,3 +1,4 @@
+// PDFMines v46 — compact responsive thumbnail cards
 const $ = id => document.getElementById(id);
 const input = $("imageInput");
 const drop = $("dropZone");
@@ -156,7 +157,11 @@ function render(){
 
     const img = document.createElement("img");
     img.draggable = false;
+    // The thumbnail is a preview only. Do not let Android Chrome treat a
+    // long-press on the image as an image action/context-menu gesture.
+    img.style.pointerEvents = "none";
     img.addEventListener("dragstart", e => e.preventDefault());
+    img.addEventListener("contextmenu", e => e.preventDefault());
     img.decoding = "async";
     img.loading = "eager";
     img.alt = `Page ${i + 1} preview`;
@@ -198,6 +203,10 @@ function render(){
     };
 
     div.append(img, num, dragHint, del);
+    // Prevent Android/iOS image context menus during the intentional
+    // long-press used to start reordering. Normal vertical scrolling is
+    // still handled by the card's touch-action.
+    div.addEventListener("contextmenu", e => e.preventDefault());
     thumbs.appendChild(div);
 
     // Never allow the browser to create its own drag ghost. Desktop uses native HTML5
