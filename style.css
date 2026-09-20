@@ -294,3 +294,12 @@ body.modal-open{overflow:hidden}
   pointer-events: none !important;
   -webkit-user-drag: none !important;
 }
+
+/* Mobile reorder handle */
+@media (pointer: coarse){
+  .drag-hint{
+    touch-action:none !important;
+    pointer-events:auto !important;
+    cursor:grab;
+  }
+}

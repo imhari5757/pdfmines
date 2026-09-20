@@ -1,4 +1,4 @@
-// PDFMines v46 — compact responsive thumbnail cards
+// PDFMines v48 — compact responsive thumbnail cards
 const $ = id => document.getElementById(id);
 const input = $("imageInput");
 const drop = $("dropZone");
@@ -64,26 +64,31 @@ function runTouchAutoScroll(){
     return;
   }
 
-  const edge = Math.min(96, Math.max(64, window.innerHeight * 0.12));
-  const y = touchDrag.lastY;
-  let delta = 0;
+  const viewportHeight=window.innerHeight;
+  const edge=Math.min(180,Math.max(88,viewportHeight*0.18));
+  const y=touchDrag.lastY;
+  let delta=0;
 
-  if(y < edge){
-    const distance = edge - y;
-    delta = -Math.min(18, Math.max(3, distance * 0.22));
-  }else if(y > window.innerHeight - edge){
-    const distance = y - (window.innerHeight - edge);
-    delta = Math.min(18, Math.max(3, distance * 0.22));
+  if(y<edge){
+    const ratio=(edge-y)/edge;
+    delta=-Math.max(2,Math.min(22,2+ratio*20));
+  }else if(y>viewportHeight-edge){
+    const ratio=(y-(viewportHeight-edge))/edge;
+    delta=Math.max(2,Math.min(22,2+ratio*20));
   }
 
-  if(delta !== 0){
-    window.scrollBy(0, delta);
-    updateTouchGhost(touchDrag.lastX, touchDrag.lastY);
-    touchDrag.hoverIndex = findTouchHoverIndex(touchDrag.lastX, touchDrag.lastY);
+  if(delta!==0){
+    const scroller=document.scrollingElement||document.documentElement;
+    const before=scroller.scrollTop;
+    scroller.scrollTop=before+delta;
+    if(scroller.scrollTop===before) window.scrollBy(0,delta);
+
+    updateTouchGhost(touchDrag.lastX,touchDrag.lastY);
+    touchDrag.hoverIndex=findTouchHoverIndex(touchDrag.lastX,touchDrag.lastY);
     showTouchDropTarget(touchDrag.hoverIndex);
   }
 
-  touchDrag.autoScrollFrame = requestAnimationFrame(runTouchAutoScroll);
+  touchDrag.autoScrollFrame=requestAnimationFrame(runTouchAutoScroll);
 }
 
 function startTouchAutoScroll(){
@@ -104,8 +109,6 @@ function makeTouchGhost(el,x,y){
   const ghost=el.cloneNode(true);
   ghost.classList.add("touch-drag-ghost");
   ghost.classList.remove("dragging","drag-over");
-  // The real thumbnails are a 3-column CSS grid with width:100% !important.
-  // Force the floating drag preview to keep the exact measured thumbnail size.
   ghost.style.setProperty('width', `${r.width}px`, 'important');
   ghost.style.setProperty('min-width', '0px', 'important');
   ghost.style.setProperty('max-width', `${r.width}px`, 'important');
@@ -191,8 +194,6 @@ function render(){
     const div = document.createElement("div");
     div.className = "thumb";
     div.dataset.fileIndex = String(i);
-    // Android/Touch browsers have a native drag ghost that ignores our thumbnail sizing.
-    // Disable native HTML5 dragging on coarse pointers and use our controlled PointerEvent drag.
     const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
     div.draggable = !coarsePointer;
     div.title = "Drag to reorder";
@@ -251,8 +252,6 @@ function render(){
     div.addEventListener("contextmenu", e => e.preventDefault());
     thumbs.appendChild(div);
 
-    // Never allow the browser to create its own drag ghost. Desktop uses native HTML5
-    // drag only when the pointer is fine; touch uses our controlled PointerEvent drag.
     div.addEventListener("dragstart", e => {
       if(coarsePointer) { e.preventDefault(); return; }
 
@@ -289,8 +288,6 @@ function render(){
       }
     });
 
-    // Touch / mobile drag: deliberate long-press + move.
-    // Normal vertical swiping remains normal page scrolling.
     let longPressTimer = null;
     let touchPending = false;
     let touchPointerId = null;
@@ -302,67 +299,78 @@ function render(){
       touchPointerId = null;
     };
 
-    div.addEventListener("pointerdown", e => {
-      if(e.pointerType!=="touch" || e.target.closest("button")) return;
+    dragHint.style.touchAction = "none";
+    dragHint.style.pointerEvents = "auto";
+
+    dragHint.addEventListener("pointerdown", e => {
+      if(e.pointerType !== "touch") return;
+      e.preventDefault();
+
       touchPending = true;
       touchPointerId = e.pointerId;
-      touchDrag.active=false;
-      touchDrag.startIndex=i;
-      touchDrag.el=div;
-      touchDrag.pointerId=e.pointerId;
-      touchDrag.startX=e.clientX;
-      touchDrag.startY=e.clientY;
-      touchDrag.lastX=e.clientX;
-      touchDrag.lastY=e.clientY;
-      try{div.setPointerCapture(e.pointerId);}catch(_){}
+      touchDrag.active = false;
+      touchDrag.startIndex = i;
+      touchDrag.el = div;
+      touchDrag.pointerId = e.pointerId;
+      touchDrag.startX = e.clientX;
+      touchDrag.startY = e.clientY;
+      touchDrag.lastX = e.clientX;
+      touchDrag.lastY = e.clientY;
+
+      try{ dragHint.setPointerCapture(e.pointerId); }catch(_){ }
 
       longPressTimer = setTimeout(() => {
-        if(!touchPending || touchPointerId!==e.pointerId) return;
-        touchDrag.active=true;
+        if(!touchPending || touchPointerId !== e.pointerId) return;
+        touchDrag.active = true;
         div.classList.add("dragging");
-        div.setAttribute("aria-grabbed","true");
-        touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
+        div.setAttribute("aria-grabbed", "true");
+        touchDrag.ghost = makeTouchGhost(div, e.clientX, e.clientY);
         startTouchAutoScroll();
-      }, 360);
-    },{passive:false});
+      }, 320);
+    }, {passive:false});
 
-    div.addEventListener("pointermove", e => {
-      if(e.pointerType!=="touch" || touchDrag.el!==div ||
-         touchDrag.pointerId!==e.pointerId) return;
+    dragHint.addEventListener("pointermove", e => {
+      if(e.pointerType !== "touch" || touchDrag.el !== div ||
+         touchDrag.pointerId !== e.pointerId) return;
 
-      const dx=e.clientX-touchDrag.startX;
-      const dy=e.clientY-touchDrag.startY;
-      touchDrag.lastX=e.clientX;
-      touchDrag.lastY=e.clientY;
+      e.preventDefault();
+      const dx = e.clientX - touchDrag.startX;
+      const dy = e.clientY - touchDrag.startY;
+      touchDrag.lastX = e.clientX;
+      touchDrag.lastY = e.clientY;
 
       if(!touchDrag.active){
-        // Movement before the long-press means the user is scrolling.
-        if(Math.hypot(dx,dy)>8) cancelPendingTouch();
+        if(Math.hypot(dx, dy) > 8) cancelPendingTouch();
         return;
       }
 
-      e.preventDefault();
-      updateTouchGhost(e.clientX,e.clientY);
-      touchDrag.hoverIndex=findTouchHoverIndex(e.clientX,e.clientY);
-      startTouchAutoScroll();
+      updateTouchGhost(e.clientX, e.clientY);
+      touchDrag.hoverIndex = findTouchHoverIndex(e.clientX, e.clientY);
       showTouchDropTarget(touchDrag.hoverIndex);
-    },{passive:false});
+      startTouchAutoScroll();
+    }, {passive:false});
 
     const finishPointer = e => {
-      if(e.pointerType!=="touch" || touchDrag.el!==div ||
-         touchDrag.pointerId!==e.pointerId) return;
+      if(e.pointerType !== "touch" || touchDrag.el !== div ||
+         touchDrag.pointerId !== e.pointerId) return;
+
+      e.preventDefault();
       if(touchDrag.active){
-        e.preventDefault();
         finishTouchDrag();
       }else{
         cancelPendingTouch();
         stopTouchAutoScroll();
-        touchDrag={active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,lastX:0,lastY:0,pointerId:null,startX:0,startY:0,autoScrollFrame:null};
+        touchDrag = {
+          active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,
+          lastX:0,lastY:0,pointerId:null,startX:0,startY:0,autoScrollFrame:null
+        };
       }
-      try{div.releasePointerCapture(e.pointerId);}catch(_){}
+      try{ dragHint.releasePointerCapture(e.pointerId); }catch(_){ }
     };
-    div.addEventListener("pointerup", finishPointer, {passive:false});
-    div.addEventListener("pointercancel", finishPointer, {passive:false});
+
+    dragHint.addEventListener("pointerup", finishPointer, {passive:false});
+    dragHint.addEventListener("pointercancel", finishPointer, {passive:false});
+
   });
 
   status.textContent = "● Ready";
