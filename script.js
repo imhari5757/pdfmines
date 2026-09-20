@@ -238,12 +238,23 @@ function render(){
       }
     });
 
-    // Touch / mobile drag: use a visual floating copy. We never move the
-    // real DOM thumbnail during the finger movement, avoiding mobile
-    // browser drag/scroll errors.
+    // Touch / mobile drag: deliberate long-press + move.
+    // Normal vertical swiping remains normal page scrolling.
+    let longPressTimer = null;
+    let touchPending = false;
+    let touchPointerId = null;
+
+    const cancelPendingTouch = () => {
+      if(longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = null;
+      touchPending = false;
+      touchPointerId = null;
+    };
+
     div.addEventListener("pointerdown", e => {
       if(e.pointerType!=="touch" || e.target.closest("button")) return;
-      e.preventDefault();
+      touchPending = true;
+      touchPointerId = e.pointerId;
       touchDrag.active=false;
       touchDrag.startIndex=i;
       touchDrag.el=div;
@@ -253,22 +264,29 @@ function render(){
       touchDrag.lastX=e.clientX;
       touchDrag.lastY=e.clientY;
       try{div.setPointerCapture(e.pointerId);}catch(_){}
+
+      longPressTimer = setTimeout(() => {
+        if(!touchPending || touchPointerId!==e.pointerId) return;
+        touchDrag.active=true;
+        div.classList.add("dragging");
+        div.setAttribute("aria-grabbed","true");
+        touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
+      }, 360);
     },{passive:false});
 
     div.addEventListener("pointermove", e => {
       if(e.pointerType!=="touch" || touchDrag.el!==div ||
          touchDrag.pointerId!==e.pointerId) return;
 
+      const dx=e.clientX-touchDrag.startX;
+      const dy=e.clientY-touchDrag.startY;
       touchDrag.lastX=e.clientX;
       touchDrag.lastY=e.clientY;
 
       if(!touchDrag.active){
-        if(Math.hypot(e.clientX-touchDrag.startX,e.clientY-touchDrag.startY)<8) return;
-        touchDrag.active=true;
-        e.preventDefault();
-        div.classList.add("dragging");
-        div.setAttribute("aria-grabbed","true");
-        touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
+        // Movement before the long-press means the user is scrolling.
+        if(Math.hypot(dx,dy)>8) cancelPendingTouch();
+        return;
       }
 
       e.preventDefault();
@@ -277,18 +295,20 @@ function render(){
       showTouchDropTarget(touchDrag.hoverIndex);
     },{passive:false});
 
-    div.addEventListener("pointerup", e => {
-      if(e.pointerType==="touch" && touchDrag.el===div &&
-         touchDrag.pointerId===e.pointerId){
+    const finishPointer = e => {
+      if(e.pointerType!=="touch" || touchDrag.el!==div ||
+         touchDrag.pointerId!==e.pointerId) return;
+      if(touchDrag.active){
         e.preventDefault();
         finishTouchDrag();
+      }else{
+        cancelPendingTouch();
+        touchDrag={active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,lastX:0,lastY:0,pointerId:null,startX:0,startY:0};
       }
-    },{passive:false});
-
-    div.addEventListener("pointercancel", e => {
-      if(e.pointerType==="touch" && touchDrag.el===div &&
-         touchDrag.pointerId===e.pointerId) resetTouchDrag();
-    });
+      try{div.releasePointerCapture(e.pointerId);}catch(_){}
+    };
+    div.addEventListener("pointerup", finishPointer, {passive:false});
+    div.addEventListener("pointercancel", finishPointer, {passive:false});
   });
 
   status.textContent = "● Ready";

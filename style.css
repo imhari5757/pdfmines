@@ -83,22 +83,27 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
 .thumb.drag-over{border-color:var(--accent,#5b5bf7)!important;box-shadow:0 0 0 3px rgba(91,91,247,.22),0 8px 18px rgba(91,91,247,.12);transform:translateY(-3px)}
 @media (pointer:coarse){.thumb{touch-action:none!important}}
 
-/* Photo thumbnails: fixed 3-column matrix on mobile and desktop.
-   The tool card itself does not resize horizontally as photos are added. */
+/* Responsive photo preview matrix: 1xN mobile, 2xN tablet, 3xN desktop. */
 .thumbs{
   display:grid !important;
   grid-template-columns:repeat(3,minmax(0,1fr)) !important;
-  gap:10px !important;
+  gap:14px !important;
   overflow:visible !important;
   width:100% !important;
-  padding:13px 0 !important;
+  padding:16px 0 !important;
   box-sizing:border-box;
 }
 .thumb{
   min-width:0 !important;
   width:100% !important;
-  height:112px !important;
+  height:190px !important;
   box-sizing:border-box;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#f7f8fb;
+  position:relative;
+  overflow:hidden;
+  cursor:grab;
 }
 .thumb img{
   display:block !important;
@@ -107,9 +112,19 @@ button,a,select{font:inherit}.topbar{height:72px;background:rgba(255,255,255,.88
   object-fit:contain !important;
   background:#f7f8fb;
 }
-@media(max-width:520px){
-  .thumbs{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:10px !important;}
-  .thumb{height:112px !important;}
+@media (max-width:850px){
+  .thumbs{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:14px !important;}
+  .thumb{height:205px !important;}
+}
+@media (max-width:520px){
+  .thumbs{grid-template-columns:1fr !important;gap:14px !important;}
+  .thumb{height:230px !important;border-radius:18px;}
+}
+
+/* On touch devices, normal vertical swiping should scroll the page.
+   Reordering begins only after a deliberate long-press + move. */
+@media (pointer:coarse){
+  .thumb{touch-action:pan-y !important;cursor:default;}
 }
 
 .thumb img.preview-loading{opacity:.35;filter:blur(2px)}
