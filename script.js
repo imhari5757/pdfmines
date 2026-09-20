@@ -288,7 +288,6 @@ function updatePdfImageFormatUI(){
     pdfImagePreviewStatus.textContent=`${toolFiles[0].__pdfPageCount || ""} page${toolFiles[0].__pdfPageCount===1?"":"s"} found • ${label}`;
   }
 }
-pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
 function getAutoQuality(targetBytes, pageCount) {
   if (!targetBytes || !pageCount) return "high";
@@ -809,6 +808,7 @@ const pdfImagePages = $("pdfImagePages");
 const pdfImagePreview = $("pdfImagePreview");
 const pdfImagePreviewStatus = $("pdfImagePreviewStatus");
 let activeTool = null;
+pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
 if(window.pdfjsLib){
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
