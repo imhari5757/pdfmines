@@ -373,7 +373,7 @@ $("createBtn").onclick = async () => {
           ? `Optimizing size… pass ${attempt + 1}/${compressionLevels.length}, page ${i + 1}/${files.length}`
           : `Preparing page ${i + 1} of ${files.length}…`;
 
-        const image = await prepareImage(files[i], quality, factor, colorMode);
+        const image = await prepareImage(files[i], quality, factor, colorMode, i);
 
         let pageWmm, pageHmm;
         if (size === "letter") {
@@ -431,10 +431,16 @@ $("createBtn").onclick = async () => {
     }
     status.textContent = "● PDF ready";
   } catch (err) {
-    console.error("PDFMines PDF error:", err);
+    console.error("[PDFMines] PDF creation failed", {
+      error: err,
+      message: err && err.message,
+      stack: err && err.stack,
+      files: files.map(f => ({ name: f.name, type: f.type, size: f.size }))
+    });
     txt.textContent = "Could not create PDF";
     status.textContent = "● Error";
-    alert(`Could not create the PDF.\n\n${err && err.message ? err.message : err}`);
+    const message = err && err.message ? err.message : String(err);
+    alert(`Could not create the PDF.\n\n${message}\n\nTip: Open Chrome → ⋮ → Developer tools/remote debugging if you need the detailed diagnostic log.`);
   } finally {
     button.disabled = false;
   }
@@ -444,7 +450,7 @@ $("createBtn").onclick = async () => {
 // - avoids FileReader/base64 duplication
 // - decodes the source once
 // - creates one JPEG Blob/Uint8Array for the PDF
-async function prepareImage(file, quality, factor = 1, colorMode = "color") {
+async function prepareImage(file, quality, factor = 1, colorMode = "color", fileIndex = -1) {
   const baseMax = quality === "small" ? 1600 : quality === "medium" ? 2400 : 3000;
   const baseJpegQuality = quality === "small" ? 0.72 : quality === "medium" ? 0.84 : 0.90;
 
@@ -453,41 +459,100 @@ async function prepareImage(file, quality, factor = 1, colorMode = "color") {
   const max = baseMax;
   const jpegQuality = Math.max(0.22, Math.min(0.92, baseJpegQuality * factor));
 
-  // Prefer createImageBitmap on modern mobile browsers. It is more reliable
-  // for camera/gallery images and avoids the object-URL decoding issue seen
-  // on some Android Chrome builds.
-  let source = null;
-  let sourceW = 0;
-  let sourceH = 0;
-  let shouldClose = false;
+  // Diagnostic pipeline: keep the exact stage so Android/browser failures are
+  // actionable instead of collapsing everything into "Could not read image".
+  let stage = "initializing";
+  let bitmapFirstError = null;
+  let bitmapSimpleError = null;
+  let objectUrlError = null;
+  let fileReaderError = null;
 
   try {
+    stage = "createImageBitmap (orientation-aware)";
     if ("createImageBitmap" in window) {
       try {
         source = await createImageBitmap(file, { imageOrientation: "from-image" });
-      } catch (_) {
+      } catch (err) {
+        bitmapFirstError = err;
         // Some browsers reject the options object; try the simple form.
-        source = await createImageBitmap(file);
+        stage = "createImageBitmap (basic)";
+        try {
+          source = await createImageBitmap(file);
+        } catch (err2) {
+          bitmapSimpleError = err2;
+          source = null;
+        }
       }
-      sourceW = source.width;
-      sourceH = source.height;
-      shouldClose = true;
+      if (source) {
+        sourceW = source.width;
+        sourceH = source.height;
+        shouldClose = true;
+      }
+    } else {
+      stage = "createImageBitmap unavailable";
     }
-  } catch (_) {
+  } catch (err) {
+    bitmapSimpleError = err;
     source = null;
   }
 
-  // Reliable fallback: read the actual file bytes into a data URL.
+  // Android-safe fallback: use a temporary object URL instead of FileReader/base64.
+  // This stays local to the browser and avoids duplicating large images as Base64 text.
   if (!source) {
-    const dataUrl = await fileToDataURL(file);
-    source = await loadImageFromDataURL(dataUrl);
-    sourceW = source.naturalWidth || source.width;
-    sourceH = source.naturalHeight || source.height;
+    let objectUrl = null;
+    try {
+      stage = "object URL creation";
+      objectUrl = URL.createObjectURL(file);
+      stage = "image decode via object URL";
+      source = await loadImageFromObjectURL(objectUrl);
+      sourceW = source.naturalWidth || source.width;
+      sourceH = source.naturalHeight || source.height;
+    } catch (err) {
+      objectUrlError = err;
+      source = null;
+
+      // Final fallback only. If this fails, report the exact FileReader stage.
+      try {
+        stage = "FileReader → Data URL (last fallback)";
+        const dataUrl = await fileToDataURL(file);
+        stage = "image decode via Data URL";
+        source = await loadImageFromDataURL(dataUrl);
+        sourceW = source.naturalWidth || source.width;
+        sourceH = source.height;
+      } catch (err2) {
+        fileReaderError = err2;
+        source = null;
+      }
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
   }
 
   if (!sourceW || !sourceH) {
     if (shouldClose && source.close) source.close();
-    throw new Error("Could not read the image dimensions");
+
+    const name = file && file.name ? file.name : `file ${fileIndex + 1}`;
+    const detail = fileReaderError
+      ? `FileReader failed: ${fileReaderError.message || "unknown error"}`
+      : objectUrlError
+        ? `Object URL decode failed: ${objectUrlError.message || "unknown error"}`
+        : bitmapSimpleError
+          ? `createImageBitmap failed: ${bitmapSimpleError.message || "unknown error"}`
+          : "No image decoder succeeded";
+
+    console.error("[PDFMines image diagnostic]", {
+      file: name,
+      fileIndex,
+      type: file && file.type,
+      size: file && file.size,
+      lastStage: stage,
+      bitmapFirstError,
+      bitmapSimpleError,
+      objectUrlError,
+      fileReaderError
+    });
+
+    throw new Error(`Image read failed at: ${stage}. File: ${name}. ${detail}`);
   }
 
   const scale = Math.min(1, max / Math.max(sourceW, sourceH));
@@ -564,6 +629,15 @@ function fileToDataURL(file) {
     reader.onload = () => resolve(reader.result);
     reader.onerror = () => reject(new Error("Could not read the selected image file"));
     reader.readAsDataURL(file);
+  });
+}
+
+function loadImageFromObjectURL(objectUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not decode this image. Please use JPG, PNG or WEBP."));
+    img.src = objectUrl;
   });
 }
 
