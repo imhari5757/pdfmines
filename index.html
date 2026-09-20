@@ -192,23 +192,24 @@
       <div class="pdf-image-options-title">Export options</div>
       <div class="pdf-image-option-grid">
         <label class="tool-option">Output format
-          <select id="pdfImageFormat">
-            <option value="jpg" selected>JPG</option>
-            <option value="jpeg">JPEG</option>
-            <option value="png">PNG</option>
+          <select id="pdfImageFormat" aria-label="Output image format">
+            <option value="jpg" selected>JPG — best compatibility</option>
+            <option value="jpeg">JPEG — same image quality family</option>
+            <option value="png">PNG — lossless</option>
           </select>
         </label>
-        <label class="tool-option" id="pdfImageQualityWrap">JPG quality
-          <select id="pdfImageQuality">
-            <option value="0.92" selected>High</option>
-            <option value="0.78">Medium</option>
-            <option value="0.62">Small file</option>
+        <label class="tool-option" id="pdfImageQualityWrap">Image quality
+          <select id="pdfImageQuality" aria-label="Image quality">
+            <option value="0.92" selected>High quality</option>
+            <option value="0.78">Balanced</option>
+            <option value="0.62">Smaller file</option>
           </select>
+          <small class="option-hint">Quality applies to JPG/JPEG. PNG is lossless.</small>
         </label>
       </div>
       <label class="tool-option">Pages to convert
-        <input id="pdfImagePages" type="text" placeholder="All pages (or e.g. 1-3,5)">
-        <small class="option-hint">Leave empty to convert every page.</small>
+        <input id="pdfImagePages" type="text" inputmode="text" placeholder="All pages  •  e.g. 1-3,5">
+        <small class="option-hint">Leave empty for all pages. You can also choose a range such as 2-6.</small>
       </label>
       <div class="pdf-image-preview-head"><b>Page preview</b><span id="pdfImagePreviewStatus">Choose a PDF to preview.</span></div>
       <div id="pdfImagePreview" class="pdf-image-preview"></div>
@@ -219,24 +220,6 @@
   </div>
 </div>
 
-<section class="pdf-image-showcase" aria-label="PDF to image preview">
-  <div class="showcase-copy">
-    <div class="eyebrow">NEW TOOL</div>
-    <h2>PDF → Images</h2>
-    <p>Choose JPG, JPEG or PNG, preview your PDF pages and export the pages you need — directly in your browser.</p>
-    <button class="btn secondary showcase-open" data-tool="pdf2image">Try PDF → Images →</button>
-  </div>
-  <div class="showcase-window">
-    <div class="showcase-toolbar"><span class="mini-dot"></span><span class="mini-dot"></span><span class="mini-dot"></span><b>PDF → Images</b><span class="showcase-ready">● Ready</span></div>
-    <div class="showcase-body">
-      <div class="showcase-pdf-page"><div class="mock-page-head"></div><div class="mock-page-line w80"></div><div class="mock-page-line w92"></div><div class="mock-page-line w66"></div><div class="mock-page-photo"></div><div class="mock-page-line w78"></div><div class="mock-page-line w55"></div><span>PDF page 1</span></div>
-      <div class="showcase-arrow">→</div>
-      <div class="showcase-outputs"><div class="output-chip active"><span>JPG</span><b>Page 1</b></div><div class="output-chip"><span>PNG</span><b>Page 2</b></div><div class="output-chip"><span>JPG</span><b>Page 3</b></div></div>
-    </div>
-    <div class="showcase-footer"><span>Format</span><strong>JPG</strong><span>Quality</span><strong>High</strong><button>Convert</button></div>
-  </div>
-</section>
-
 <section id="privacy" class="privacy">
   <div class="privacy-card"><div class="shield">🛡️</div><div><div class="eyebrow">PRIVACY FIRST</div><h2>Documents stay on your device.</h2><p>PDFMines is designed so the image-to-PDF conversion happens inside your browser. This version does not upload your selected images to a PDFMines server.</p></div></div>
 </section>
@@ -246,6 +229,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=38"></script>
+<script src="script.js?v=39"></script>
 </body>
 </html>

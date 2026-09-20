@@ -280,10 +280,15 @@ function render(){
 
 $("clearBtn").onclick = () => { files = []; input.value = ""; render(); };
 
-pdfImageFormat?.addEventListener("change",()=>{
-  const isPng=pdfImageFormat.value==="png";
+function updatePdfImageFormatUI(){
+  const isPng=pdfImageFormat?.value==="png";
   pdfImageQualityWrap?.classList.toggle("hidden",isPng);
-});
+  if(pdfImagePreviewStatus && activeTool==="pdf2image" && toolFiles[0]){
+    const label=isPng ? "PNG • lossless" : pdfImageFormat?.value.toUpperCase()+" • compressed image";
+    pdfImagePreviewStatus.textContent=`${toolFiles[0].__pdfPageCount || ""} page${toolFiles[0].__pdfPageCount===1?"":"s"} found • ${label}`;
+  }
+}
+pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
 function getAutoQuality(targetBytes, pageCount) {
   if (!targetBytes || !pageCount) return "high";
@@ -917,6 +922,7 @@ function openTool(name){
     if(pdfImageQualityWrap) pdfImageQualityWrap.classList.remove("hidden");
     if(pdfImagePreview) pdfImagePreview.innerHTML='<div class="pdf-image-preview-empty">Choose a PDF to see page previews here.</div>';
     if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Choose a PDF to preview.";
+    updatePdfImageFormatUI();
   }
   if(name==="number") {
     setNumberPosition("bottom-center");
@@ -943,8 +949,12 @@ function closeTool(){
 
 function backFromTool(){ closeTool(); }
 
-document.querySelectorAll(".tool-open").forEach(btn=>{
-  btn.addEventListener("click",()=>openTool(btn.dataset.tool));
+document.querySelectorAll("[data-tool]").forEach(btn=>{
+  btn.addEventListener("click",e=>{
+    e.preventDefault();
+    const name=btn.dataset.tool;
+    if(name) openTool(name);
+  });
 });
 $("toolModalClose").onclick=closeTool;
 $("toolModalBack")?.addEventListener("click",backFromTool);
@@ -1060,6 +1070,7 @@ async function renderPdfImagePreview(file){
     }
     const more=pdf.numPages>12 ? ` Showing first 12 of ${pdf.numPages}.` : "";
     if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent=`${pdf.numPages} page${pdf.numPages===1?"":"s"} found.${more}`;
+    updatePdfImageFormatUI();
   }catch(err){
     console.error("PDF preview failed",err);
     pdfImagePreview.innerHTML=`<div class="pdf-image-preview-empty">Could not preview this PDF. ${err?.message || "Please try another PDF."}</div>`;

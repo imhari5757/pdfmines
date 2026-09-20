@@ -14,3 +14,5 @@ Client-side Images → PDF prototype for GitHub Pages.
 
 ## GitHub Pages
 Upload the files in this folder to the repository root. The `index.html` uses `script.js?v=3` to avoid stale browser caching after deployment.
+
+PDF → Images now opens from every PDF → Images entry and supports JPG, JPEG, and PNG via a format dropdown with page preview.
