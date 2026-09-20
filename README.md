@@ -1,11 +1,13 @@
-# PDFMines v46
+# PDFMines v47
 
-JPG/PNG/WEBP to PDF responsive preview update.
+JPG/PNG/WEBP to PDF responsive preview with touch drag auto-scroll.
 
-- Mobile: 1 x N
-- Tablet: 2 x N
-- Desktop: 3 x N
-- Compact image-sized preview cards instead of full-width cards
-- Smaller thumbnails to reduce scrolling for large page counts
-- Keeps native image context-menu protection and long-press reorder behavior
+- Mobile: 1 × N
+- Tablet: 2 × N
+- Desktop: 3 × N
+- Compact responsive preview cards
+- Long-press reorder on touch devices
+- Automatic page scrolling while dragging near the top or bottom edge
+- Desktop drag and drop
+- Browser image context menu protection during reorder
 - Camera feature remains removed

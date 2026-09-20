@@ -48,8 +48,49 @@ let desktopDragIndex = null;
 let touchDrag = {
   active:false, startIndex:-1, el:null, ghost:null,
   hoverIndex:-1, lastX:0, lastY:0, pointerId:null,
-  startX:0, startY:0
+  startX:0, startY:0, autoScrollFrame:null
 };
+
+function stopTouchAutoScroll(){
+  if(touchDrag.autoScrollFrame !== null){
+    cancelAnimationFrame(touchDrag.autoScrollFrame);
+    touchDrag.autoScrollFrame = null;
+  }
+}
+
+function runTouchAutoScroll(){
+  if(!touchDrag.active){
+    stopTouchAutoScroll();
+    return;
+  }
+
+  const edge = Math.min(96, Math.max(64, window.innerHeight * 0.12));
+  const y = touchDrag.lastY;
+  let delta = 0;
+
+  if(y < edge){
+    const distance = edge - y;
+    delta = -Math.min(18, Math.max(3, distance * 0.22));
+  }else if(y > window.innerHeight - edge){
+    const distance = y - (window.innerHeight - edge);
+    delta = Math.min(18, Math.max(3, distance * 0.22));
+  }
+
+  if(delta !== 0){
+    window.scrollBy(0, delta);
+    updateTouchGhost(touchDrag.lastX, touchDrag.lastY);
+    touchDrag.hoverIndex = findTouchHoverIndex(touchDrag.lastX, touchDrag.lastY);
+    showTouchDropTarget(touchDrag.hoverIndex);
+  }
+
+  touchDrag.autoScrollFrame = requestAnimationFrame(runTouchAutoScroll);
+}
+
+function startTouchAutoScroll(){
+  if(touchDrag.autoScrollFrame === null){
+    touchDrag.autoScrollFrame = requestAnimationFrame(runTouchAutoScroll);
+  }
+}
 
 function reorderFiles(fromIndex,toIndex){
   if(fromIndex===toIndex || fromIndex<0 || toIndex<0 ||
@@ -112,9 +153,10 @@ function resetTouchDrag(){
     el.classList.remove("drag-over");
     el.removeAttribute("aria-grabbed");
   });
+  stopTouchAutoScroll();
   touchDrag={
     active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,
-    lastX:0,lastY:0,pointerId:null,startX:0,startY:0
+    lastX:0,lastY:0,pointerId:null,startX:0,startY:0,autoScrollFrame:null
   };
 }
 
@@ -280,6 +322,7 @@ function render(){
         div.classList.add("dragging");
         div.setAttribute("aria-grabbed","true");
         touchDrag.ghost=makeTouchGhost(div,e.clientX,e.clientY);
+        startTouchAutoScroll();
       }, 360);
     },{passive:false});
 
@@ -301,6 +344,7 @@ function render(){
       e.preventDefault();
       updateTouchGhost(e.clientX,e.clientY);
       touchDrag.hoverIndex=findTouchHoverIndex(e.clientX,e.clientY);
+      startTouchAutoScroll();
       showTouchDropTarget(touchDrag.hoverIndex);
     },{passive:false});
 
@@ -312,7 +356,8 @@ function render(){
         finishTouchDrag();
       }else{
         cancelPendingTouch();
-        touchDrag={active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,lastX:0,lastY:0,pointerId:null,startX:0,startY:0};
+        stopTouchAutoScroll();
+        touchDrag={active:false,startIndex:-1,el:null,ghost:null,hoverIndex:-1,lastX:0,lastY:0,pointerId:null,startX:0,startY:0,autoScrollFrame:null};
       }
       try{div.releasePointerCapture(e.pointerId);}catch(_){}
     };
