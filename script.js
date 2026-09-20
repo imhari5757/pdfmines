@@ -280,6 +280,11 @@ function render(){
 
 $("clearBtn").onclick = () => { files = []; input.value = ""; render(); };
 
+pdfImageFormat?.addEventListener("change",()=>{
+  const isPng=pdfImageFormat.value==="png";
+  pdfImageQualityWrap?.classList.toggle("hidden",isPng);
+});
+
 function getAutoQuality(targetBytes, pageCount) {
   if (!targetBytes || !pageCount) return "high";
 
@@ -791,7 +796,18 @@ const splitPagesWrap = $("splitPagesWrap");
 const rotateAngleWrap = $("rotateAngleWrap");
 const numberOptionsWrap = $("numberOptionsWrap");
 const numberPositionGrid = $("numberPositionGrid");
+const pdfImageOptions = $("pdfImageOptions");
+const pdfImageFormat = $("pdfImageFormat");
+const pdfImageQuality = $("pdfImageQuality");
+const pdfImageQualityWrap = $("pdfImageQualityWrap");
+const pdfImagePages = $("pdfImagePages");
+const pdfImagePreview = $("pdfImagePreview");
+const pdfImagePreviewStatus = $("pdfImagePreviewStatus");
 let activeTool = null;
+
+if(window.pdfjsLib){
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
 
 function setNumberPosition(pos){
   numberPositionGrid?.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.pos===pos));
@@ -855,6 +871,13 @@ const TOOL_CONFIG = {
     accept:"application/pdf",
     multiple:false,
     action:"Add Page Numbers"
+  },
+  pdf2image: {
+    title:"PDF → JPG / PNG",
+    desc:"Convert PDF pages into JPG, JPEG or PNG images. Preview pages before exporting. Everything stays in this browser.",
+    accept:"application/pdf",
+    multiple:false,
+    action:"Convert PDF to Images"
   }
 };
 
@@ -882,6 +905,19 @@ function openTool(name){
     document.querySelectorAll('input[name="splitOutput"]').forEach(r=>r.checked=(r.value==="single"));
   }
   numberOptionsWrap.classList.toggle("hidden",name!=="number");
+  pdfImageOptions?.classList.toggle("hidden",name!=="pdf2image");
+  if(name!=="pdf2image" && pdfImagePreview){
+    pdfImagePreview.innerHTML="";
+    if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Choose a PDF to preview.";
+  }
+  if(name==="pdf2image") {
+    if(pdfImageFormat) pdfImageFormat.value="jpg";
+    if(pdfImageQuality) pdfImageQuality.value="0.92";
+    if(pdfImagePages) pdfImagePages.value="";
+    if(pdfImageQualityWrap) pdfImageQualityWrap.classList.remove("hidden");
+    if(pdfImagePreview) pdfImagePreview.innerHTML='<div class="pdf-image-preview-empty">Choose a PDF to see page previews here.</div>';
+    if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Choose a PDF to preview.";
+  }
   if(name==="number") {
     setNumberPosition("bottom-center");
     setupNumberPageSelectors();
@@ -932,6 +968,9 @@ toolInput.addEventListener("change",async()=>{
     }catch(e){}
     setupNumberPageSelectors();
   }
+  if(activeTool==="pdf2image" && toolFiles[0]){
+    await renderPdfImagePreview(toolFiles[0]);
+  }
 });
 
 function renderToolFiles(){
@@ -963,6 +1002,120 @@ function downloadToolBytes(bytes,name){
   const a=document.createElement("a");
   a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+function ensurePDFJS(){
+  if(!window.pdfjsLib) throw new Error("PDF preview engine could not load. Please reload the page.");
+  return window.pdfjsLib;
+}
+
+async function loadPdfJsDocument(file){
+  const pdfjs=ensurePDFJS();
+  const data=await readBytes(file);
+  return await pdfjs.getDocument({data}).promise;
+}
+
+function getPdfImagePages(count){
+  const text=(pdfImagePages?.value || "").trim();
+  if(!text) return Array.from({length:count},(_,i)=>i);
+  return parsePageSelection(text,count);
+}
+
+async function renderPdfImagePreview(file){
+  if(!pdfImagePreview) return;
+  pdfImagePreview.innerHTML='<div class="pdf-image-preview-empty">Loading page previews…</div>';
+  if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Reading PDF…";
+  try{
+    const pdf=await loadPdfJsDocument(file);
+    file.__pdfPageCount=pdf.numPages;
+    const indices=Array.from({length:Math.min(pdf.numPages,12)},(_,i)=>i);
+    pdfImagePreview.innerHTML="";
+    for(const index of indices){
+      const card=document.createElement("div");
+      card.className="pdf-page-thumb loading";
+      const canvas=document.createElement("canvas");
+      canvas.width=160; canvas.height=210;
+      const label=document.createElement("span");
+      label.textContent=`Page ${index+1}`;
+      card.append(canvas,label);
+      pdfImagePreview.append(card);
+      try{
+        const page=await pdf.getPage(index+1);
+        const base=page.getViewport({scale:1});
+        const scale=Math.min(0.45, 160/base.width);
+        const viewport=page.getViewport({scale:Math.max(0.25,scale)});
+        const ratio=window.devicePixelRatio || 1;
+        canvas.width=Math.max(1,Math.round(viewport.width*ratio));
+        canvas.height=Math.max(1,Math.round(viewport.height*ratio));
+        canvas.style.width=`${viewport.width}px`;
+        canvas.style.height=`${viewport.height}px`;
+        const ctx=canvas.getContext("2d",{alpha:false});
+        await page.render({canvasContext:ctx,viewport,transform:ratio!==1?[ratio,0,0,ratio,0,0]:null}).promise;
+        card.classList.remove("loading");
+      }catch(err){
+        card.classList.remove("loading");
+        label.textContent=`Page ${index+1} — preview unavailable`;
+        console.warn("PDF page preview failed",index+1,err);
+      }
+    }
+    const more=pdf.numPages>12 ? ` Showing first 12 of ${pdf.numPages}.` : "";
+    if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent=`${pdf.numPages} page${pdf.numPages===1?"":"s"} found.${more}`;
+  }catch(err){
+    console.error("PDF preview failed",err);
+    pdfImagePreview.innerHTML=`<div class="pdf-image-preview-empty">Could not preview this PDF. ${err?.message || "Please try another PDF."}</div>`;
+    if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Preview failed.";
+  }
+}
+
+function canvasToImageBlob(canvas,format,quality){
+  const mime=format==="png" ? "image/png" : "image/jpeg";
+  return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Could not create the image output.")),mime,format==="png"?undefined:quality));
+}
+
+async function convertPdfToImages(file){
+  const pdf=await loadPdfJsDocument(file);
+  const indices=getPdfImagePages(pdf.numPages);
+  if(!indices.length) throw new Error("Select at least one PDF page.");
+  const format=pdfImageFormat?.value || "jpg";
+  const quality=Number(pdfImageQuality?.value || 0.92);
+  const outputs=[];
+  for(let n=0;n<indices.length;n++){
+    const index=indices[n];
+    toolStatus.textContent=`Rendering page ${n+1} of ${indices.length}…`;
+    const page=await pdf.getPage(index+1);
+    const viewport=page.getViewport({scale:1.6});
+    const canvas=document.createElement("canvas");
+    const ratio=Math.min(2,window.devicePixelRatio||1);
+    canvas.width=Math.max(1,Math.round(viewport.width*ratio));
+    canvas.height=Math.max(1,Math.round(viewport.height*ratio));
+    const ctx=canvas.getContext("2d",{alpha:false});
+    ctx.fillStyle="#ffffff";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    const renderViewport=ratio===1 ? viewport : page.getViewport({scale:1.6*ratio});
+    await page.render({canvasContext:ctx,viewport:renderViewport}).promise;
+    const blob=await canvasToImageBlob(canvas,format,quality);
+    outputs.push({blob,page:index+1});
+  }
+  return outputs;
+}
+
+function downloadImageBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1800);
+}
+
+async function pdfToImagesAndDownload(file){
+  const outputs=await convertPdfToImages(file);
+  const format=pdfImageFormat?.value || "jpg";
+  const ext=format==="jpeg" ? "jpeg" : format;
+  const base=(file.name||"PDF").replace(/\.pdf$/i,"") || "PDF";
+  for(let i=0;i<outputs.length;i++){
+    downloadImageBlob(outputs[i].blob,`${base}_page_${String(outputs[i].page).padStart(2,"0")}.${ext}`);
+    if(i<outputs.length-1) await new Promise(r=>setTimeout(r,280));
+  }
+  return outputs;
 }
 
 async function imageFileToPdfBytes(file){
@@ -1198,6 +1351,13 @@ toolRun.onclick=async()=>{
     }
     else if(activeTool==="rotate") bytes=await rotatePdf(toolFiles[0]);
     else if(activeTool==="number") bytes=await numberPdf(toolFiles[0]);
+    else if(activeTool==="pdf2image") {
+      const outputs=await pdfToImagesAndDownload(toolFiles[0]);
+      const format=pdfImageFormat?.value || "jpg";
+      const totalKb=Math.round(outputs.reduce((sum,item)=>sum+item.blob.size,0)/1024);
+      toolStatus.textContent=`Done ✓  ${outputs.length} ${format.toUpperCase()} image${outputs.length===1?"":"s"} downloaded — ${totalKb} KB total.`;
+      return;
+    }
 
     const base=activeTool==="merge"?"PDFMines_Merged":
       activeTool==="mix"?"PDFMines_Combined":
