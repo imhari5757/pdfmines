@@ -41,7 +41,7 @@
       <div class="upload-actions">
         <button class="btn primary small" id="chooseBtn">Browse gallery</button>
       </div>
-      <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+      <input id="imageInput" type="file" accept="image/*,.jpg,.jpeg,.png,.webp" multiple hidden>
     </div>
     <div id="fileArea" class="file-area hidden">
       <div class="file-head"><b id="fileCount">0 pages</b><button id="clearBtn" class="text-btn">Clear all</button></div>
@@ -211,6 +211,12 @@
         <input id="pdfImagePages" type="text" inputmode="text" placeholder="All pages  •  e.g. 1-3,5">
         <small class="option-hint">Leave empty for all pages. You can also choose a range such as 2-6.</small>
       </label>
+      <div class="tool-option">Download as
+        <div class="split-output-grid pdf-image-download-options">
+          <label class="split-output-card"><input type="radio" name="pdfImageOutput" value="individual" checked><span><b>Individual images</b><small>Download each page separately.</small></span></label>
+          <label class="split-output-card"><input type="radio" name="pdfImageOutput" value="zip"><span><b>ZIP file</b><small>Download all converted pages together in one ZIP.</small></span></label>
+        </div>
+      </div>
       <div class="pdf-image-preview-head"><b>Page preview</b><span id="pdfImagePreviewStatus">Choose a PDF to preview.</span></div>
       <div id="pdfImagePreview" class="pdf-image-preview"></div>
     </div>
@@ -228,7 +234,8 @@
 <footer id="about"><div><b>PDFMines</b><span>Fast, private PDF tools.</span></div><span>© 2026 PDFMines · Prototype</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=40"></script>
+<script src="script.js?v=42"></script>
 </body>
 </html>

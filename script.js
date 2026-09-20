@@ -21,8 +21,25 @@ input.addEventListener("change", () => { addFiles([...input.files]); input.value
 }));
 drop.addEventListener("drop", e => addFiles([...e.dataTransfer.files]));
 
+function isSupportedImageFile(file){
+  if(!file) return false;
+  const type=String(file.type||"").toLowerCase().split(";")[0].trim();
+  const name=String(file.name||"").toLowerCase();
+  const ext=name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  // Some Android Gallery/File Manager providers return an empty or non-standard
+  // MIME type even though the selected file is a normal JPG/PNG/WEBP. In that
+  // case, trust the filename extension.
+  return ["image/jpeg","image/jpg","image/png","image/webp"].includes(type)
+      || [".jpg",".jpeg",".png",".webp"].includes(ext);
+}
+
 function addFiles(newFiles){
-  const valid = newFiles.filter(f => /^(image\/jpeg|image\/png|image\/webp)$/i.test(f.type));
+  const valid = newFiles.filter(isSupportedImageFile);
+  if(!valid.length && newFiles.length){
+    status.textContent = "● Unsupported image";
+    alert("PDFMines could not recognize the selected image.\n\nPlease choose JPG, JPEG, PNG or WEBP.");
+    return;
+  }
   files.push(...valid);
   render();
 }
@@ -919,6 +936,8 @@ function openTool(name){
     if(pdfImageFormat) pdfImageFormat.value="jpg";
     if(pdfImageQuality) pdfImageQuality.value="0.92";
     if(pdfImagePages) pdfImagePages.value="";
+    const individualOutput=document.querySelector('input[name="pdfImageOutput"][value="individual"]');
+    if(individualOutput) individualOutput.checked=true;
     if(pdfImageQualityWrap) pdfImageQualityWrap.classList.remove("hidden");
     if(pdfImagePreview) pdfImagePreview.innerHTML='<div class="pdf-image-preview-empty">Choose a PDF to see page previews here.</div>';
     if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Choose a PDF to preview.";
@@ -966,7 +985,8 @@ toolDrop.addEventListener("click",e=>{
 toolInput.addEventListener("change",async()=>{
   const chosen=[...toolInput.files];
   if(activeTool==="mix"){
-    toolFiles.push(...chosen.filter(f=>/^(application\/pdf|image\/jpeg|image\/png|image\/webp)$/i.test(f.type)));
+    const valid=chosen.filter(f=>/^application\/pdf$/i.test(String(f.type||"").split(";")[0].trim()) || isSupportedImageFile(f));
+    toolFiles.push(...valid);
   }else{
     toolFiles=chosen.slice(0, activeTool==="merge" ? 50 : 1);
   }
@@ -1122,6 +1142,23 @@ async function pdfToImagesAndDownload(file){
   const format=pdfImageFormat?.value || "jpg";
   const ext=format==="jpeg" ? "jpeg" : format;
   const base=(file.name||"PDF").replace(/\.pdf$/i,"") || "PDF";
+  const outputMode=document.querySelector('input[name="pdfImageOutput"]:checked')?.value || "individual";
+
+  if(outputMode==="zip"){
+    if(typeof JSZip==="undefined") throw new Error("ZIP support could not be loaded. Please refresh the page and try again.");
+    toolStatus.textContent=`Creating ZIP with ${outputs.length} image${outputs.length===1?"":"s"}…`;
+    const zip=new JSZip();
+    outputs.forEach(item=>{
+      const filename=`${base}_page_${String(item.page).padStart(2,"0")}.${ext}`;
+      zip.file(filename,item.blob);
+    });
+    const zipBlob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}}, meta=>{
+      toolStatus.textContent=`Creating ZIP… ${Math.round(meta.percent)}%`;
+    });
+    downloadImageBlob(zipBlob,`${base}_images.zip`);
+    return outputs;
+  }
+
   for(let i=0;i<outputs.length;i++){
     downloadImageBlob(outputs[i].blob,`${base}_page_${String(outputs[i].page).padStart(2,"0")}.${ext}`);
     if(i<outputs.length-1) await new Promise(r=>setTimeout(r,280));
@@ -1365,8 +1402,11 @@ toolRun.onclick=async()=>{
     else if(activeTool==="pdf2image") {
       const outputs=await pdfToImagesAndDownload(toolFiles[0]);
       const format=pdfImageFormat?.value || "jpg";
+      const mode=document.querySelector('input[name="pdfImageOutput"]:checked')?.value || "individual";
       const totalKb=Math.round(outputs.reduce((sum,item)=>sum+item.blob.size,0)/1024);
-      toolStatus.textContent=`Done ✓  ${outputs.length} ${format.toUpperCase()} image${outputs.length===1?"":"s"} downloaded — ${totalKb} KB total.`;
+      toolStatus.textContent=mode==="zip"
+        ? `Done ✓  ${outputs.length} ${format.toUpperCase()} image${outputs.length===1?"":"s"} packed into one ZIP — ${totalKb} KB images total.`
+        : `Done ✓  ${outputs.length} ${format.toUpperCase()} image${outputs.length===1?"":"s"} downloaded — ${totalKb} KB total.`;
       return;
     }
 
