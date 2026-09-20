@@ -1,12 +1,11 @@
-const input = document.getElementById("imageInput");
-const drop = document.getElementById("dropZone");
-const fileArea = document.getElementById("fileArea");
-const thumbs = document.getElementById("thumbs");
-const fileCount = document.getElementById("fileCount");
+const $ = id => document.getElementById(id);
+const input = $("imageInput");
+const drop = $("dropZone");
+const fileArea = $("fileArea");
+const thumbs = $("thumbs");
+const fileCount = $("fileCount");
 const status = document.querySelector(".status-dot");
 let files = [];
-
-const $ = id => document.getElementById(id);
 
 $("startBtn").onclick = () => input.click();
 $("chooseBtn").onclick = e => { e.stopPropagation(); input.click(); };
@@ -477,6 +476,11 @@ $("createBtn").onclick = async () => {
 // - decodes the source once
 // - creates one JPEG Blob/Uint8Array for the PDF
 async function prepareImage(file, quality, factor = 1, colorMode = "color", fileIndex = -1) {
+  let source = null;
+  let sourceW = 0;
+  let sourceH = 0;
+  let shouldClose = false;
+
   const baseMax = quality === "small" ? 1600 : quality === "medium" ? 2400 : 3000;
   const baseJpegQuality = quality === "small" ? 0.72 : quality === "medium" ? 0.84 : 0.90;
 

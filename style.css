@@ -254,3 +254,7 @@ body.modal-open{overflow:hidden}
 
 .pdf-image-download-options{margin-top:8px;}
 .pdf-image-download-options .split-output-card{min-height:64px;}
+
+/* Mobile-safe file picker: keep the input programmatically/label accessible without affecting layout. */
+#imageInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#chooseBtn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
