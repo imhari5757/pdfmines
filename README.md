@@ -16,3 +16,6 @@ JPG/PNG/WEBP to PDF responsive preview and reorder update.
 - Added an explicit Save Crop action for manual rectangle selection.
 - Saved crop is retained while applying background, filter, sharpness, compression and final export.
 - Manual mode can be reopened to replace the saved crop.
+
+
+Version 61: manual crop now shows a visible “Drag to move” hover cue inside the selected rectangle and changes the pointer to grab/grabbing while repositioning the crop.

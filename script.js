@@ -1820,6 +1820,20 @@ function drawManualEditor(){
   ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.strokeRect(p.x,p.y,w,h);ctx.setLineDash([]);
   ctx.fillStyle="#fff";
   [[p.x,p.y],[p.x+w,p.y],[p.x,p.y+h],[p.x+w,p.y+h]].forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();});
+
+  if(examCropMode==="manual" && w>80 && h>42){
+    const label="✋  Drag to move";
+    ctx.font="700 12px system-ui,-apple-system,Segoe UI,sans-serif";
+    const tw=ctx.measureText(label).width+24, th=30;
+    const lx=p.x+(w-tw)/2, ly=p.y+(h-th)/2;
+    ctx.fillStyle="rgba(15,23,42,.82)";
+    ctx.beginPath();
+    ctx.roundRect(lx,ly,tw,th,10);
+    ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(label,lx+tw/2,ly+th/2+0.5);
+  }
   ctx.restore();
 }
 
@@ -1830,7 +1844,7 @@ function setExamCropMode(mode,preserveApplied=false){
     examManualCrop=current?{x:current.x,y:current.y,w:current.w,h:current.h}:null;
     examAutoCropMode?.classList.remove("active");
     examManualCropMode?.classList.add("active");
-    if(examCropHint) examCropHint.textContent="Drag to draw a rectangle. Drag inside the rectangle to move it; drag outside to draw a new one.";
+    if(examCropHint) examCropHint.textContent="Drag to draw. Hover inside the rectangle until the hand cursor appears, then drag to move it.";
     examManualNote?.classList.add("visible");
     examPreviewCanvas?.parentElement?.classList.add("manual");
     if(examZoom) examZoom.disabled=true;
@@ -1883,16 +1897,25 @@ function bindManualCropEditor(){
     const inside=existing && x>=existing.x && x<=existing.x+existing.w && y>=existing.y && y<=existing.y+existing.h;
     if(inside){
       examCropPointer={active:true,mode:"move",startX:x,startY:y,currentX:x,currentY:y,offsetX:x-existing.x,offsetY:y-existing.y};
+      canvas.style.cursor="grabbing";
     }else{
       examCropPointer={active:true,mode:"draw",startX:x,startY:y,currentX:x,currentY:y,offsetX:0,offsetY:0};
+      canvas.style.cursor="crosshair";
       examManualCrop={x,y,w:1,h:1};
     }
     drawManualEditor();
     try{canvas.setPointerCapture(e.pointerId);}catch(_){ }
   });
   canvas.addEventListener("pointermove",e=>{
-    if(!examCropPointer.active||examCropMode!=="manual") return;
+    if(examCropMode!=="manual") return;
     const pt=previewToSourcePoint(e.clientX,e.clientY,canvas);
+    if(!examCropPointer.active){
+      const c=examManualCrop;
+      const inside=c && pt.x>=c.x && pt.x<=c.x+c.w && pt.y>=c.y && pt.y<=c.y+c.h;
+      canvas.style.cursor=inside ? "grab" : "crosshair";
+      return;
+    }
+    canvas.style.cursor=examCropPointer.mode==="move" ? "grabbing" : "crosshair";
     const sw=examImage.naturalWidth||examImage.width;
     const sh=examImage.naturalHeight||examImage.height;
     examCropPointer.currentX=pt.x;examCropPointer.currentY=pt.y;
@@ -1914,6 +1937,7 @@ function bindManualCropEditor(){
   const finish=e=>{
     if(!examCropPointer.active) return;
     examCropPointer.active=false;
+    canvas.style.cursor="crosshair";
     try{canvas.releasePointerCapture(e.pointerId);}catch(_){ }
     const crop=examManualCrop;
     if(!crop||crop.w<5||crop.h<5){
