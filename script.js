@@ -1802,6 +1802,11 @@ function getExamCrop(){
     const frameY=Math.max(0,Math.min(sh-1,base.y));
     const frameW=Math.max(1,Math.min(sw-frameX,base.w));
     const frameH=Math.max(1,Math.min(sh-frameY,base.h));
+
+    // IMPORTANT: the manual rectangle is the FRAME and never zooms.
+    // Image Zoom changes only the source window shown INSIDE that frame.
+    // 0% = the frame's current composition; + = show a smaller source area
+    // (zoom in); - = show a larger source area (zoom out).
     const zoomPct=Math.max(-100,Math.min(100,Number(examZoom?.value)||0));
     const zoom=zoomPct>=0 ? 1+(zoomPct/50) : Math.max(0.2,1+(zoomPct/100));
     let w=Math.max(1,frameW/zoom), h=Math.max(1,frameH/zoom);
@@ -1809,6 +1814,7 @@ function getExamCrop(){
       const fit=Math.min(sw/w,sh/h);
       w*=fit; h*=fit;
     }
+
     const centerX=frameX+frameW/2, centerY=frameY+frameH/2;
     const maxX=Math.max(0,sw-w), maxY=Math.max(0,sh-h);
     const ox=Number(examOffsetX.value)||0, oy=Number(examOffsetY.value)||0;
@@ -1816,7 +1822,7 @@ function getExamCrop(){
     let y=centerY-h/2 + (oy*maxY/2);
     x=Math.max(0,Math.min(maxX,x));
     y=Math.max(0,Math.min(maxY,y));
-    return {x,y,w,h,sw,sh,tw,th,frame:{x:frameX,y:frameY,w:frameW,h:frameH}};
+    return {x,y,w,h,sw,sh,tw,th,frame:{x:frameX,y:frameY,w:frameW,h:frameH},imageZoom:zoomPct};
   }
 
   if(examCropMode!=="manual" && examDraftAutoCrop){
@@ -1902,8 +1908,8 @@ function updateLiveExamCropDimensions(crop,mode="selection"){
     return;
   }
   const w=Math.round(crop.w),h=Math.round(crop.h);
-  const label=mode==="resizing" ? "Resizing" : "Selection";
-  examLiveCropDimensions.innerHTML=`${label}: <strong>${w} × ${h} px</strong> <small>• output ${crop.tw} × ${crop.th} px</small>`;
+  const label=mode==="resizing" ? "Frame resizing" : "Frame";
+  examLiveCropDimensions.innerHTML=`${label}: <strong>${w} × ${h} px</strong> <small>• output ${crop.tw} × ${crop.th} px${crop.imageZoom!==undefined ? ` • image zoom ${crop.imageZoom>0?"+":""}${crop.imageZoom}%` : ""}</small>`;
 }
 
 function getExamEdgeAtPoint(crop,x,y,canvas){
@@ -1999,9 +2005,13 @@ function drawManualEditor(){
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.clearRect(fp.x,fp.y,fw,fh);
 
-  // Render the currently zoomed/panned image content into the fixed frame.
+  // Render ONLY the image content into the fixed frame. The frame geometry
+  // comes from `frame`; changing Image Zoom must never change fp/fw/fh.
   if(visible){
+    ctx.save();
+    ctx.beginPath();ctx.rect(fp.x,fp.y,fw,fh);ctx.clip();
     ctx.drawImage(examImage,visible.x,visible.y,visible.w,visible.h,fp.x,fp.y,fw,fh);
+    ctx.restore();
   }
 
   ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.setLineDash([7,5]);
@@ -2522,7 +2532,7 @@ function downloadExamBlob(blob){
 [examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
 [examWidth,examHeight].forEach(el=>el?.addEventListener("input",()=>{examAppliedCrop=null;examDraftAutoCrop=null;updateExamPreview();}));
 [examMaxKB,examFormat,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
-examZoom?.addEventListener("input",()=>{examDraftAutoCrop=null;updateExamZoomLabel();updateExamPreview();});
+examZoom?.addEventListener("input",()=>{examDraftAutoCrop=null;updateExamZoomLabel();const c=getExamCrop();if(c) updateLiveExamCropDimensions(c,"selection");updateExamPreview();});
 [examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("change",updateExamPreview));
 examAutoFit?.addEventListener("click",()=>{examAppliedCrop=null;examDraftAutoCrop=null;setExamCropMode("auto");examZoom.value="0";examOffsetX.value="0";examOffsetY.value="0"; updateExamZoomLabel();examManualNote?.classList.remove("saved");if(examSaveCropHint)examSaveCropHint.textContent="Save the current crop and continue with enhancement.";updateExamPreview();});
 examAutoCropMode?.addEventListener("click",()=>setExamCropMode("auto"));
