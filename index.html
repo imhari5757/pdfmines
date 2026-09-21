@@ -146,7 +146,53 @@
           <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.01" value="0"></label>
           <label>Vertical <input id="examOffsetY" type="range" min="-1" max="1" step="0.01" value="0"></label>
         </div>
+        <div class="exam-enhance-grid">
+          <label class="tool-option">Background
+            <select id="examBackground"><option value="original">Original</option><option value="white">White</option></select>
+          </label>
+          <label class="tool-option">Filter
+            <select id="examFilter"><option value="original">Original</option><option value="clean">Clean paper</option><option value="grayscale">Grayscale</option></select>
+          </label>
+          <label class="tool-option">Sharpness
+            <select id="examSharpness"><option value="off">Off</option><option value="medium" selected>Medium</option><option value="strong">Strong</option></select>
+          </label>
+        </div>
+        <div class="exam-enhance-note">White background works best when the original background is already light. Clean paper is tuned for signatures, declarations and thumb impressions photographed on paper.</div>
         <div class="exam-fit-row"><button id="examAutoFit" class="btn secondary small" type="button">Auto fit</button><span>Preview uses the exact output aspect ratio.</span></div>
+      </div>
+      <div class="exam-compare-card">
+        <div class="exam-compare-head"><b>Before / After</b><span>Compare the original and enhanced result</span></div>
+        <div class="exam-compare-grid">
+          <div><small>Original</small><canvas id="examBeforeCanvas" width="220" height="180"></canvas></div>
+          <div><small>Enhanced</small><canvas id="examAfterCanvas" width="220" height="180"></canvas></div>
+        </div>
+        <label class="exam-compare-slider">Compare position <input id="examCompareRange" type="range" min="0" max="100" value="100"></label>
+      </div>
+      <div class="exam-smart-row">
+        <button id="examMakeReady" class="btn primary small" type="button">✨ Make Exam Ready</button>
+        <button id="examCheck" class="btn secondary small" type="button">Check quality</button>
+        <span id="examQualitySummary">Upload an image for a quality check.</span>
+      </div>
+      <div class="exam-quality-card hidden" id="examQualityCard"></div>
+      <div class="exam-batch-card">
+        <div class="exam-compare-head"><b>IBPS — Prepare All Documents</b><span>Optional batch ZIP</span></div>
+        <div class="exam-batch-grid">
+          <label>Photograph<input id="batchPhoto" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
+          <label>Signature<input id="batchSignature" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
+          <label>Thumb impression<input id="batchThumb" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
+          <label>Handwritten declaration<input id="batchDeclaration" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
+        </div>
+        <button id="examBatchDownload" class="btn secondary small" type="button">Download all as ZIP</button>
+        <small>Batch packaging uses the stored IBPS profile. Always compare against the latest official notification.</small>
+      </div>
+      <div class="exam-dpi-card">
+        <div class="exam-compare-head"><b>Pixel ↔ DPI helper</b><span>Useful when a notice gives cm and DPI</span></div>
+        <div class="exam-dpi-grid">
+          <label>Width (cm)<input id="dpiCmW" type="number" min="0" step="0.01" value="3"></label>
+          <label>Height (cm)<input id="dpiCmH" type="number" min="0" step="0.01" value="3"></label>
+          <label>DPI<input id="dpiValue" type="number" min="1" step="1" value="200"></label>
+          <div class="exam-dpi-result" id="dpiResult">200 × 200 px</div>
+        </div>
       </div>
       <div class="exam-validation" id="examValidation"></div>
     </div>

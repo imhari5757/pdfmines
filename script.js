@@ -1,4 +1,4 @@
-// PDFMines v50 — compact responsive thumbnail cards
+// PDFMines v53 — compact responsive thumbnail cards
 const $ = id => document.getElementById(id);
 const input = $("imageInput");
 const drop = $("dropZone");
@@ -1015,8 +1015,27 @@ const examSourceInfo = $("examSourceInfo");
 const examZoom = $("examZoom");
 const examOffsetX = $("examOffsetX");
 const examOffsetY = $("examOffsetY");
+const examBackground = $("examBackground");
+const examFilter = $("examFilter");
+const examSharpness = $("examSharpness");
 const examAutoFit = $("examAutoFit");
 const examValidation = $("examValidation");
+const examBeforeCanvas = $("examBeforeCanvas");
+const examAfterCanvas = $("examAfterCanvas");
+const examCompareRange = $("examCompareRange");
+const examMakeReady = $("examMakeReady");
+const examCheck = $("examCheck");
+const examQualitySummary = $("examQualitySummary");
+const examQualityCard = $("examQualityCard");
+const examBatchDownload = $("examBatchDownload");
+const batchPhoto = $("batchPhoto");
+const batchSignature = $("batchSignature");
+const batchThumb = $("batchThumb");
+const batchDeclaration = $("batchDeclaration");
+const dpiCmW = $("dpiCmW");
+const dpiCmH = $("dpiCmH");
+const dpiValue = $("dpiValue");
+const dpiResult = $("dpiResult");
 let activeTool = null;
 pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
@@ -1202,6 +1221,18 @@ toolInput.addEventListener("change",async()=>{
   }
   if(activeTool==="pdf2image" && toolFiles[0]){
     await renderPdfImagePreview(toolFiles[0]);
+  }
+  if(activeTool==="exam-resizer" && toolFiles[0]){
+    try{
+      examImage=await loadExamImage(toolFiles[0]);
+      examSourceInfo.textContent=`${toolFiles[0].name} • ${examImage.naturalWidth} × ${examImage.naturalHeight} px`;
+      examQualitySummary.textContent="Image loaded. Run Check quality or Make Exam Ready.";
+      updateExamPreview();
+      setExamValidation("Image loaded. Adjust crop, background, filter or sharpness, then download the validated output.","ok");
+    }catch(err){
+      examImage=null;
+      setExamValidation(err.message,"error");
+    }
   }
 });
 
@@ -1584,6 +1615,16 @@ const EXAM_PROFILES = {
       photo: {w:null,h:null,maxKB:null,format:"jpeg",note:"Several 2026 SSC applications use live photo capture rather than a fixed uploaded photo size."},
       signature: {w:709,h:236,maxKB:20,format:"jpeg",note:"About 6.0 cm × 2.0 cm at 300 DPI; JPEG/JPG 10–20 KB. Pixel equivalent is approximately 709 × 236."}
     }
+  },
+  ibps: {
+    label: "IBPS",
+    source: "IBPS application instructions",
+    docs: {
+      photo: {w:200,h:230,maxKB:50,format:"jpeg",note:"Preferred photograph size: 200 × 230 pixels; 20–50 KB."},
+      signature: {w:140,h:60,maxKB:20,format:"jpeg",note:"Preferred signature size: 140 × 60 pixels; 10–20 KB."},
+      thumb: {w:240,h:240,maxKB:50,format:"jpeg",note:"Preferred left thumb impression size: 240 × 240 pixels (3 cm × 3 cm) at 200 DPI; 20–50 KB."},
+      declaration: {w:800,h:400,maxKB:100,format:"jpeg",note:"Preferred handwritten declaration size: 800 × 400 pixels (10 cm × 5 cm) at 200 DPI; 50–100 KB."}
+    }
   }
 };
 
@@ -1633,6 +1674,9 @@ function resetExamResizer(){
   examImage=null;
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
   examZoom.value="1"; examOffsetX.value="0"; examOffsetY.value="0";
+  examBackground.value=examDocType.value==="photo" ? "original" : "white";
+  examFilter.value=examDocType.value==="photo" ? "original" : "clean";
+  examSharpness.value="medium";
   const cfg=getExamConfig();
   if(cfg.w) examWidth.value=cfg.w;
   if(cfg.h) examHeight.value=cfg.h;
@@ -1643,6 +1687,10 @@ function resetExamResizer(){
   const ctx=examPreviewCanvas?.getContext("2d");
   if(ctx){ctx.clearRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);}
   updateExamRequirement();
+  updateExamComparison();
+  updateDpiResult();
+  examQualityCard?.classList.add("hidden");
+  examQualitySummary.textContent="Upload an image for a quality check.";
   setExamValidation("Ready. Your image will be processed only in this browser.");
 }
 
@@ -1674,6 +1722,182 @@ function getExamCrop(){
   return {x,y,w:cropW,h:cropH,sw,sh,tw,th};
 }
 
+function drawExamBase(canvas, crop){
+  canvas.width=crop.tw;
+  canvas.height=crop.th;
+  const ctx=canvas.getContext("2d",{alpha:false,willReadFrequently:true});
+  ctx.fillStyle="#fff";
+  ctx.fillRect(0,0,crop.tw,crop.th);
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality="high";
+  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.tw,crop.th);
+  return ctx;
+}
+
+function applyExamImageAdjustments(canvas){
+  const ctx=canvas.getContext("2d",{alpha:false,willReadFrequently:true});
+  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+  const data=image.data;
+  const background=examBackground.value;
+  const filter=examFilter.value;
+  const sharpness=examSharpness.value;
+
+  if(background==="white"){
+    const samplePoints=[
+      [0,0],[canvas.width-1,0],[0,canvas.height-1],[canvas.width-1,canvas.height-1]
+    ];
+    let sr=0,sg=0,sb=0;
+    for(const [x,y] of samplePoints){
+      const i=(y*canvas.width+x)*4;
+      sr+=data[i]; sg+=data[i+1]; sb+=data[i+2];
+    }
+    sr/=4; sg/=4; sb/=4;
+    for(let i=0;i<data.length;i+=4){
+      const r=data[i],g=data[i+1],b=data[i+2];
+      const lum=0.299*r+0.587*g+0.114*b;
+      const distance=Math.sqrt((r-sr)**2+(g-sg)**2+(b-sb)**2);
+      if(lum>175 && distance<70){
+        const strength=Math.min(1,Math.max(0,(lum-175)/80));
+        data[i]=Math.round(r+(255-r)*strength);
+        data[i+1]=Math.round(g+(255-g)*strength);
+        data[i+2]=Math.round(b+(255-b)*strength);
+      }
+    }
+  }
+
+  if(filter!=="original"){
+    for(let i=0;i<data.length;i+=4){
+      let r=data[i],g=data[i+1],b=data[i+2];
+      let v=0.299*r+0.587*g+0.114*b;
+      if(filter==="clean"){
+        v=Math.max(0,Math.min(255,(v-118)*1.35+128));
+        if(v>220) v=255;
+      }
+      data[i]=data[i+1]=data[i+2]=Math.round(v);
+    }
+  }
+
+  if(sharpness!=="off"){
+    const amount=sharpness==="strong"?0.72:0.42;
+    const src=new Uint8ClampedArray(data);
+    const w=canvas.width,h=canvas.height;
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        const i=(y*w+x)*4;
+        for(let c=0;c<3;c++){
+          const v=src[i+c];
+          const avg=(src[i-4+c]+src[i+4+c]+src[i-w*4+c]+src[i+w*4+c])/4;
+          data[i+c]=Math.max(0,Math.min(255,Math.round(v+(v-avg)*amount)));
+        }
+      }
+    }
+  }
+  ctx.putImageData(image,0,0);
+}
+
+function renderExamCanvas(canvas, crop, maxW=420, maxH=360){
+  const scale=Math.min(maxW/crop.tw,maxH/crop.th,1);
+  canvas.width=Math.max(1,Math.round(crop.tw*scale));
+  canvas.height=Math.max(1,Math.round(crop.th*scale));
+  const temp=document.createElement("canvas");
+  temp.width=crop.tw; temp.height=crop.th;
+  drawExamBase(temp,crop);
+  applyExamImageAdjustments.call(null,temp);
+  const ctx=canvas.getContext("2d",{alpha:false});
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality="high";
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(temp,0,0,canvas.width,canvas.height);
+}
+
+function drawOriginalExamCanvas(canvas,crop,maxW=220,maxH=180){
+  if(!canvas||!crop||!examImage) return;
+  const scale=Math.min(maxW/crop.tw,maxH/crop.th,1);
+  canvas.width=Math.max(1,Math.round(crop.tw*scale));
+  canvas.height=Math.max(1,Math.round(crop.th*scale));
+  const ctx=canvas.getContext("2d",{alpha:false});
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,canvas.width,canvas.height);
+}
+
+function updateExamComparison(){
+  const crop=getExamCrop();
+  if(!crop||!examImage) return;
+  drawOriginalExamCanvas(examBeforeCanvas,crop);
+  renderExamCanvas(examAfterCanvas,crop,220,180);
+  const enhanced=Number(examCompareRange?.value||100)>=50;
+  if(examAfterCanvas) examAfterCanvas.style.opacity=enhanced?"1":"0.35";
+  if(examBeforeCanvas) examBeforeCanvas.style.opacity=enhanced?"0.35":"1";
+}
+
+function getExamQuality(canvas,blob){
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  let sum=0,sum2=0,dark=0,bright=0,count=0;
+  const pixels=data.length/4, stride=Math.max(1,Math.ceil(pixels/20000));
+  for(let p=0;p<pixels;p+=stride){
+    const i=p*4,lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+    sum+=lum;sum2+=lum*lum;count++;
+    if(lum<45) dark++;
+    if(lum>250) bright++;
+  }
+  const mean=count?sum/count:0;
+  const variance=count?Math.max(0,sum2/count-mean*mean):0;
+  return {brightness:mean,contrast:Math.sqrt(variance),darkRatio:count?dark/count:0,brightRatio:count?bright/count:0,sizeKB:blob?blob.size/1024:0};
+}
+
+function runExamQualityCheck(blob){
+  const crop=getExamCrop();
+  if(!crop||!examImage){setExamValidation("Please choose an image first.","error");return;}
+  const temp=document.createElement("canvas");
+  drawExamBase(temp,crop);applyExamImageAdjustments(temp);
+  const q=getExamQuality(temp,blob),maxKB=Number(examMaxKB.value)||0,items=[];
+  items.push(q.brightness<75?"<span class='quality-warn'>⚠ Brightness is low</span>":q.brightness>245?"<span class='quality-warn'>⚠ Image is very bright</span>":"<span class='quality-ok'>✓ Brightness looks usable</span>");
+  items.push(q.contrast<22?"<span class='quality-warn'>⚠ Low contrast</span>":"<span class='quality-ok'>✓ Contrast looks usable</span>");
+  items.push(q.darkRatio>0.48?"<span class='quality-warn'>⚠ Large dark area detected</span>":"<span class='quality-ok'>✓ No excessive dark area</span>");
+  items.push(maxKB?(q.sizeKB<=maxKB?"<span class='quality-ok'>✓ File size within limit</span>":"<span class='quality-bad'>✕ File size exceeds the limit</span>"):"<span class='quality-ok'>✓ No file-size limit entered</span>");
+  examQualitySummary.textContent=`Quality check • brightness ${Math.round(q.brightness)} • contrast ${Math.round(q.contrast)}`;
+  examQualityCard.innerHTML=items.join("<br>")+`<br><small>Final dimensions: ${crop.tw} × ${crop.th} px • File: ${q.sizeKB.toFixed(1)} KB</small>`;
+  examQualityCard.classList.remove("hidden");
+}
+
+function updateDpiResult(){
+  const w=Math.max(0,Number(dpiCmW?.value)||0),h=Math.max(0,Number(dpiCmH?.value)||0),dpi=Math.max(1,Number(dpiValue?.value)||1);
+  if(dpiResult) dpiResult.textContent=`${Math.round(w/2.54*dpi)} × ${Math.round(h/2.54*dpi)} px`;
+}
+
+function makeExamReady(){
+  if(!examImage){setExamValidation("Please choose an image first.","error");return;}
+  examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";
+  examBackground.value="white";
+  examFilter.value=examDocType.value==="photo"?"original":"clean";
+  examSharpness.value="medium";
+  updateExamPreview();
+  setExamValidation("Exam-ready adjustments applied. Review the crop before downloading.","ok");
+}
+
+async function createBatchExamZip(){
+  if(typeof JSZip==="undefined") throw new Error("ZIP support could not be loaded. Please refresh the page and try again.");
+  const jobs=[[batchPhoto,"photo"],[batchSignature,"signature"],[batchThumb,"thumb"],[batchDeclaration,"declaration"]].filter(([input])=>input?.files?.[0]);
+  if(!jobs.length) throw new Error("Select at least one IBPS document for the ZIP.");
+  const zip=new JSZip();
+  for(const [input,type] of jobs){
+    const file=input.files[0],cfg=EXAM_PROFILES.ibps.docs[type];
+    const old={image:examImage,w:examWidth.value,h:examHeight.value,max:examMaxKB.value,format:examFormat.value,bg:examBackground.value,filter:examFilter.value,sharp:examSharpness.value,zoom:examZoom.value,ox:examOffsetX.value,oy:examOffsetY.value};
+    try{
+      examImage=await loadExamImage(file);
+      examWidth.value=cfg.w;examHeight.value=cfg.h;examMaxKB.value=cfg.maxKB;examFormat.value=cfg.format;
+      examBackground.value="white";examFilter.value=type==="photo"?"original":"clean";examSharpness.value="medium";examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";
+      const blob=await createExamBlob();
+      zip.file(`IBPS_${EXAM_DOC_LABELS[type].replace(/[^a-z0-9]+/gi,"_")}.${cfg.format==="png"?"png":"jpg"}`,blob);
+    }finally{
+      examImage=old.image;examWidth.value=old.w;examHeight.value=old.h;examMaxKB.value=old.max;examFormat.value=old.format;examBackground.value=old.bg;examFilter.value=old.filter;examSharpness.value=old.sharp;examZoom.value=old.zoom;examOffsetX.value=old.ox;examOffsetY.value=old.oy;
+    }
+  }
+  return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
+}
+
 function updateExamPreview(){
   if(!examPreviewCanvas) return;
   const crop=getExamCrop();
@@ -1682,15 +1906,8 @@ function updateExamPreview(){
     return;
   }
   examPreviewEmpty?.classList.add("hidden");
-  const maxPreviewW=420,maxPreviewH=360;
-  const scale=Math.min(maxPreviewW/crop.tw,maxPreviewH/crop.th,1);
-  examPreviewCanvas.width=Math.max(1,Math.round(crop.tw*scale));
-  examPreviewCanvas.height=Math.max(1,Math.round(crop.th*scale));
-  const ctx=examPreviewCanvas.getContext("2d",{alpha:false});
-  ctx.imageSmoothingEnabled=true;
-  ctx.imageSmoothingQuality="high";
-  ctx.fillStyle="#fff";ctx.fillRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);
-  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,examPreviewCanvas.width,examPreviewCanvas.height);
+  renderExamCanvas(examPreviewCanvas,crop,420,360);
+  updateExamComparison();
   const kb=Number(examMaxKB.value)||0;
   setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
 }
@@ -1699,11 +1916,8 @@ async function createExamBlob(){
   if(!examImage) throw new Error("Please choose an image first.");
   const crop=getExamCrop();
   const canvas=document.createElement("canvas");
-  canvas.width=crop.tw; canvas.height=crop.th;
-  const ctx=canvas.getContext("2d",{alpha:false});
-  ctx.fillStyle="#fff";ctx.fillRect(0,0,crop.tw,crop.th);
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
-  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.tw,crop.th);
+  drawExamBase(canvas,crop);
+  applyExamImageAdjustments(canvas);
   const format=examFormat.value;
   const maxBytes=Math.max(0,(Number(examMaxKB.value)||0)*1024);
   if(format==="png"){
@@ -1729,7 +1943,6 @@ async function createExamBlob(){
   }
   return best;
 }
-
 function downloadExamBlob(blob){
   const doc=EXAM_DOC_LABELS[examDocType.value]||"Image";
   const safe=doc.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
@@ -1741,42 +1954,26 @@ function downloadExamBlob(blob){
 }
 
 [examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
-[examWidth,examHeight,examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY].forEach(el=>el?.addEventListener("input",updateExamPreview));
-examAutoFit?.addEventListener("click",()=>{
-  examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();
-});
-
-toolInput.addEventListener("change",async()=>{
-  if(activeTool!=="exam-resizer" || !toolFiles[0]) return;
+[examWidth,examHeight,examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
+[examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("change",updateExamPreview));
+examAutoFit?.addEventListener("click",()=>{examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();});
+examMakeReady?.addEventListener("click",makeExamReady);
+examCheck?.addEventListener("click",async()=>{try{const blob=await createExamBlob();runExamQualityCheck(blob);}catch(err){setExamValidation(err.message||"Quality check failed.","error");}});
+examCompareRange?.addEventListener("input",updateExamComparison);
+[batchPhoto,batchSignature,batchThumb,batchDeclaration].forEach(el=>el?.addEventListener("change",()=>{const n=[batchPhoto,batchSignature,batchThumb,batchDeclaration].filter(x=>x?.files?.[0]).length;if(examQualitySummary&&!examImage)examQualitySummary.textContent=`${n} IBPS document${n===1?"":"s"} selected for batch ZIP.`;}));
+examBatchDownload?.addEventListener("click",async()=>{
+  examBatchDownload.disabled=true;
   try{
-    examImage=await loadExamImage(toolFiles[0]);
-    examSourceInfo.textContent=`${toolFiles[0].name} • ${examImage.naturalWidth} × ${examImage.naturalHeight} px`;
-    updateExamPreview();
-    setExamValidation("Image loaded. Adjust the crop if needed, then download the validated output.","ok");
-  }catch(err){
-    examImage=null;
-    setExamValidation(err.message,"error");
-  }
+    setExamValidation("Preparing IBPS ZIP…");
+    const blob=await createBatchExamZip();
+    const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="PDFMines_IBPS_Exam_Documents.zip";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1800);
+    setExamValidation(`IBPS package ready • ${(blob.size/1024).toFixed(1)} KB • Downloaded ✓`,"ok");
+  }catch(err){setExamValidation(err.message||"Could not create the ZIP.","error");}
+  finally{examBatchDownload.disabled=false;}
 });
+[dpiCmW,dpiCmH,dpiValue].forEach(el=>el?.addEventListener("input",updateDpiResult));
+updateDpiResult();
 
-const originalToolRunHandler=toolRun.onclick;
-toolRun.onclick=async()=>{
-  if(activeTool!=="exam-resizer") return originalToolRunHandler?.();
-  if(!toolFiles.length){setExamValidation("Please choose an image first.","error");return;}
-  if(!examImage){setExamValidation("The selected image is still loading or could not be read.","error");return;}
-  toolRun.disabled=true;
-  setExamValidation("Preparing final image…");
-  try{
-    const blob=await createExamBlob();
-    downloadExamBlob(blob);
-    const limit=Number(examMaxKB.value)||0;
-    const kb=(blob.size/1024).toFixed(1);
-    const within=!limit || blob.size<=limit*1024;
-    setExamValidation(`${cropSummary()} • Final size ${kb} KB${limit?` / limit ${limit} KB`:""} • Downloaded ✓`,within?"ok":"warn");
-  }catch(err){
-    setExamValidation(err.message||"Could not create the image.","error");
-  }finally{toolRun.disabled=false;}
-};
 
 function cropSummary(){
   const c=getExamCrop();
@@ -1785,6 +1982,22 @@ function cropSummary(){
 
 toolRun.onclick=async()=>{
   if(!activeTool) return;
+  if(activeTool==="exam-resizer") {
+    if(!toolFiles.length){setExamValidation("Please choose an image first.","error");return;}
+    if(!examImage){setExamValidation("The selected image is still loading or could not be read.","error");return;}
+    toolRun.disabled=true;
+    setExamValidation("Preparing final image…");
+    try{
+      const blob=await createExamBlob();
+      downloadExamBlob(blob);
+      const limit=Number(examMaxKB.value)||0;
+      const kb=(blob.size/1024).toFixed(1);
+      setExamValidation(`${cropSummary()} • Final size ${kb} KB${limit?` / limit ${limit} KB`:""} • Downloaded ✓`,(!limit||blob.size<=limit*1024)?"ok":"warn");
+    }catch(err){
+      setExamValidation(err.message||"Could not create the image.","error");
+    }finally{toolRun.disabled=false;}
+    return;
+  }
   if(!toolFiles.length){
     toolStatus.textContent="Please choose a file first.";
     return;
