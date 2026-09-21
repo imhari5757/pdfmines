@@ -1024,6 +1024,12 @@ const examManualCropMode = $("examManualCropMode");
 const examLockCropRatio = $("examLockCropRatio");
 const examCropHint = $("examCropHint");
 const examManualNote = $("examManualNote");
+const examSaveCrop = $("examSaveCrop");
+const examResetCrop = $("examResetCrop");
+const examCropDimensions = $("examCropDimensions");
+const examFinalCanvas = $("examFinalCanvas");
+const examReadyBadge = $("examReadyBadge");
+const examReadyText = $("examReadyText");
 const examValidation = $("examValidation");
 const examBeforeCanvas = $("examBeforeCanvas");
 const examAfterCanvas = $("examAfterCanvas");
@@ -1638,6 +1644,7 @@ let examImage = null;
 let examObjectUrl = null;
 let examCropMode = "auto";
 let examManualCrop = null;
+let examAppliedCrop = null;
 let examCropPointer = {active:false,startX:0,startY:0,currentX:0,currentY:0};
 
 function examDefaultConfig(){
@@ -1683,7 +1690,11 @@ function resetExamResizer(){
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
   examCropMode="auto";
   examManualCrop=null;
+  examAppliedCrop=null;
   examCropPointer={active:false,startX:0,startY:0,currentX:0,currentY:0};
+  if(examCropDimensions) examCropDimensions.textContent="Crop: —";
+  if(examReadyBadge){examReadyBadge.className="exam-ready-badge";examReadyBadge.textContent="READY TO EDIT";}
+  if(examReadyText) examReadyText.textContent="Adjust the crop and save it when ready.";
   examZoom.value="1"; examOffsetX.value="0"; examOffsetY.value="0";
   examBackground.value=examDocType.value==="photo" ? "original" : "white";
   examFilter.value=examDocType.value==="photo" ? "original" : "clean";
@@ -1729,6 +1740,14 @@ function getExamCrop(){
     const y=Math.max(0,Math.min(sh-1,examManualCrop.y));
     const w=Math.max(1,Math.min(sw-x,examManualCrop.w));
     const h=Math.max(1,Math.min(sh-y,examManualCrop.h));
+    return {x,y,w,h,sw,sh,tw,th};
+  }
+
+  if(examAppliedCrop){
+    const x=Math.max(0,Math.min(sw-1,examAppliedCrop.x));
+    const y=Math.max(0,Math.min(sh-1,examAppliedCrop.y));
+    const w=Math.max(1,Math.min(sw-x,examAppliedCrop.w));
+    const h=Math.max(1,Math.min(sh-y,examAppliedCrop.h));
     return {x,y,w,h,sw,sh,tw,th};
   }
 
@@ -1804,7 +1823,7 @@ function drawManualEditor(){
   ctx.restore();
 }
 
-function setExamCropMode(mode){
+function setExamCropMode(mode,preserveApplied=false){
   examCropMode=mode;
   if(mode==="manual"){
     const current=getExamCrop();
@@ -1818,6 +1837,7 @@ function setExamCropMode(mode){
     if(examOffsetX) examOffsetX.disabled=true;
     if(examOffsetY) examOffsetY.disabled=true;
   }else{
+    if(!preserveApplied) examAppliedCrop=null;
     examManualCrop=null;
     examAutoCropMode?.classList.add("active");
     examManualCropMode?.classList.remove("active");
@@ -1828,6 +1848,23 @@ function setExamCropMode(mode){
     if(examOffsetX) examOffsetX.disabled=false;
     if(examOffsetY) examOffsetY.disabled=false;
   }
+  updateExamPreview();
+}
+
+function saveCurrentCrop(){
+  const crop=examCropMode==="manual" ? examManualCrop : getExamCrop();
+  if(!crop || crop.w<5 || crop.h<5){
+    setExamValidation("Adjust the crop first, then save the crop.","warn");
+    return;
+  }
+  examAppliedCrop={x:crop.x,y:crop.y,w:crop.w,h:crop.h};
+  examManualCrop=null;
+  examManualNote?.classList.add("saved");
+  if(examCropHint) examCropHint.textContent="Crop saved ✓. You can enhance it now, or choose Manual rectangle to change it.";
+  if(examSaveCropHint) examSaveCropHint.textContent="Crop saved ✓. You can now adjust background, filter and sharpness.";
+  setExamValidation("Crop saved ✓. The selected area will be used for the final image.","ok");
+  if(examReadyBadge){examReadyBadge.className="exam-ready-badge ready";examReadyBadge.textContent="READY TO EXPORT";}
+  if(examReadyText) examReadyText.textContent=`Saved crop • final output ${crop.tw} × ${crop.th} px`;
   updateExamPreview();
 }
 
@@ -2053,6 +2090,29 @@ async function createBatchExamZip(){
   return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
 }
 
+function resetExamCrop(){
+  examAppliedCrop=null;
+  examManualCrop=null;
+  examCropPointer={active:false,startX:0,startY:0,currentX:0,currentY:0};
+  examManualNote?.classList.remove("saved");
+  if(examSaveCropHint) examSaveCropHint.textContent="Save the current crop and continue with enhancement.";
+  if(examCropHint) examCropHint.textContent=examCropMode==="manual" ? "Drag anywhere on the image to draw a rectangle. Drag again to replace it." : "Auto crop uses the selected output aspect ratio. Zoom and position remain available.";
+  updateExamPreview();
+  setExamValidation("Crop reset. Adjust the crop and save it when ready.","warn");
+}
+
+function updateExamFinalPreview(crop){
+  if(!examFinalCanvas||!crop||!examImage) return;
+  renderExamCanvas(examFinalCanvas,crop,260,210);
+  if(examCropDimensions) examCropDimensions.textContent=`Crop: ${Math.round(crop.w)} × ${Math.round(crop.h)} px → ${crop.tw} × ${crop.th} px`;
+  const limit=Number(examMaxKB.value)||0;
+  if(examReadyBadge){
+    examReadyBadge.className="exam-ready-badge ready";
+    examReadyBadge.textContent="READY TO EXPORT";
+  }
+  if(examReadyText) examReadyText.textContent=`Final output: ${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${limit?` • max ${limit} KB`:""}`;
+}
+
 function updateExamPreview(){
   if(!examPreviewCanvas) return;
   const crop=getExamCrop();
@@ -2064,6 +2124,7 @@ function updateExamPreview(){
   if(examCropMode==="manual") drawManualEditor();
   else renderExamCanvas(examPreviewCanvas,crop,420,360);
   updateExamComparison();
+  updateExamFinalPreview(crop);
   const kb=Number(examMaxKB.value)||0;
   setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
 }
@@ -2110,11 +2171,14 @@ function downloadExamBlob(blob){
 }
 
 [examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
-[examWidth,examHeight,examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
+[examWidth,examHeight].forEach(el=>el?.addEventListener("input",()=>{examAppliedCrop=null;updateExamPreview();}));
+[examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
 [examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("change",updateExamPreview));
-examAutoFit?.addEventListener("click",()=>{setExamCropMode("auto");examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();});
+examAutoFit?.addEventListener("click",()=>{examAppliedCrop=null;setExamCropMode("auto");examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";examManualNote?.classList.remove("saved");if(examSaveCropHint)examSaveCropHint.textContent="Save the current crop and continue with enhancement.";updateExamPreview();});
 examAutoCropMode?.addEventListener("click",()=>setExamCropMode("auto"));
 examManualCropMode?.addEventListener("click",()=>setExamCropMode("manual"));
+examSaveCrop?.addEventListener("click",saveCurrentCrop);
+examResetCrop?.addEventListener("click",resetExamCrop);
 examLockCropRatio?.addEventListener("change",()=>{if(examCropMode==="manual") updateExamPreview();});
 bindManualCropEditor();
 examMakeReady?.addEventListener("click",makeExamReady);
@@ -2152,7 +2216,10 @@ toolRun.onclick=async()=>{
       downloadExamBlob(blob);
       const limit=Number(examMaxKB.value)||0;
       const kb=(blob.size/1024).toFixed(1);
-      setExamValidation(`${cropSummary()} • Final size ${kb} KB${limit?` / limit ${limit} KB`:""} • Downloaded ✓`,(!limit||blob.size<=limit*1024)?"ok":"warn");
+      const withinLimit=!limit||blob.size<=limit*1024;
+      if(examReadyBadge){examReadyBadge.className=`exam-ready-badge ${withinLimit?"ready":"needs"}`;examReadyBadge.textContent=withinLimit?"READY":"NEEDS FIX";}
+      if(examReadyText) examReadyText.textContent=withinLimit?`Final file ${kb} KB • within the ${limit||"allowed"} KB limit.`:`Final file ${kb} KB • above the ${limit} KB limit. Lower the image quality or review the requirement.`;
+      setExamValidation(`${cropSummary()} • Final size ${kb} KB${limit?` / limit ${limit} KB`:""} • Downloaded ✓`,withinLimit?"ok":"warn");
     }catch(err){
       setExamValidation(err.message||"Could not create the image.","error");
     }finally{toolRun.disabled=false;}

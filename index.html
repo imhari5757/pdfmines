@@ -148,6 +148,7 @@
         </div>
         <div class="exam-preview-wrap exam-crop-editor"><canvas id="examPreviewCanvas" width="420" height="300"></canvas><div id="examPreviewEmpty">Image preview</div></div>
         <div class="exam-manual-note" id="examManualNote">Manual mode: drag anywhere on the image to draw a crop rectangle. Drag again to replace it.</div>
+        <div class="exam-crop-save-row"><button id="examSaveCrop" class="btn primary small" type="button">✓ Save Crop</button><button id="examResetCrop" class="btn secondary small" type="button">↩ Reset Crop</button><span id="examSaveCropHint">Save the current crop and continue with enhancement.</span></div>
         <div class="exam-slider-grid">
           <label>Zoom <input id="examZoom" type="range" min="1" max="3" step="0.01" value="1"></label>
           <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.01" value="0"></label>
@@ -165,7 +166,12 @@
           </label>
         </div>
         <div class="exam-enhance-note">White background works best when the original background is already light. Clean paper is tuned for signatures, declarations and thumb impressions photographed on paper.</div>
-        <div class="exam-fit-row"><button id="examAutoFit" class="btn secondary small" type="button">Auto fit</button><span>Preview uses the exact output aspect ratio.</span></div>
+        <div class="exam-fit-row"><button id="examAutoFit" class="btn secondary small" type="button">Auto fit</button><span id="examCropDimensions">Crop: —</span><span>Preview uses the exact output aspect ratio.</span></div>
+      </div>
+      <div class="exam-final-card">
+        <div class="exam-compare-head"><b>Final Preview</b><span>Exact output ratio</span></div>
+        <div class="exam-final-preview-wrap"><canvas id="examFinalCanvas" width="260" height="200"></canvas></div>
+        <div class="exam-ready-row"><span id="examReadyBadge" class="exam-ready-badge">READY TO EDIT</span><span id="examReadyText">Adjust the crop and save it when ready.</span></div>
       </div>
       <div class="exam-compare-card">
         <div class="exam-compare-head"><b>Before / After</b><span>Compare the original and enhanced result</span></div>
@@ -336,6 +342,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=52"></script>
+<script src="script.js?v=57"></script>
 </body>
 </html>
