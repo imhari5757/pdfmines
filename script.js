@@ -1711,6 +1711,12 @@ function getExamConfig(){
   return doc ? {...examDefaultConfig(),...doc} : examDefaultConfig();
 }
 
+function updateExamZoomLabel(){
+  if(!examZoomValue || !examZoom) return;
+  const v=Number(examZoom.value)||0;
+  examZoomValue.textContent=`${v>0?"+":""}${v}%`;
+}
+
 function updateExamRequirement(){
   if(!examRequirementCard) return;
   const profile=EXAM_PROFILES[examProfile?.value];
