@@ -1725,7 +1725,7 @@ function updateExamZoomLabel(){
 }
 
 function getExamPreviewZoomFactor(){
-  const pct=Math.max(-100,Math.min(100,Number(examPreviewZoom?.value)||0));
+  const pct=Math.max(-100,Math.min(100,Number(examZoom?.value)||0));
   return 1 + (pct/200);
 }
 
@@ -1828,7 +1828,7 @@ function getExamCrop(){
     // Image Zoom changes only the source window shown INSIDE that frame.
     // 0% = the frame's current composition; + = show a smaller source area
     // (zoom in); - = show a larger source area (zoom out).
-    const zoomPct=Math.max(-100,Math.min(100,Number(examZoom?.value)||0));
+    const zoomPct=Math.max(-100,Math.min(100,Number(examPreviewZoom?.value)||0));
     const zoom=zoomPct>=0 ? 1+(zoomPct/50) : Math.max(0.2,1+(zoomPct/100));
     let w=Math.max(1,frameW/zoom), h=Math.max(1,frameH/zoom);
     if(w>sw || h>sh){
@@ -2038,7 +2038,7 @@ function drawManualEditor(){
   drawCropHandles(ctx,frame,canvas);
 
   if(fw>80 && fh>42){
-    const label=Number(examZoom?.value||0)!==0 ? "✋  Drag to move • Zoom active" : "✋  Drag to move";
+    const label=Number(examPreviewZoom?.value||0)!==0 ? "✋  Drag to move • Frame zoom active" : "✋  Drag to move";
     ctx.font="700 12px system-ui,-apple-system,Segoe UI,sans-serif";
     const tw=Math.min(fw-8,ctx.measureText(label).width+24), th=30;
     if(tw>70){
@@ -2101,7 +2101,7 @@ function setExamCropMode(mode,preserveApplied=false){
     examManualCrop=null;
     examAutoCropMode?.classList.remove("active");
     examManualCropMode?.classList.add("active");
-    if(examCropHint) examCropHint.textContent="Drag to draw. Resize from the 4 edge handles, drag inside to move, and use Image Zoom to adjust the picture inside the frame.";
+    if(examCropHint) examCropHint.textContent="Drag to draw. Resize from the 4 edge handles, drag inside to move, and use Frame Image Zoom to adjust the picture inside the frame.";
     examManualNote?.classList.add("visible");
     examPreviewCanvas?.parentElement?.classList.add("manual");
     const hasManualFrame=!!examManualCrop;
