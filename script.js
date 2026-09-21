@@ -1005,6 +1005,11 @@ const examResizerOptions = $("examResizerOptions");
 const examProfile = $("examProfile");
 const examDocType = $("examDocType");
 const examRequirementCard = $("examRequirementCard");
+const examPdfPreviewCard = $("examPdfPreviewCard");
+const examPdfPreview = $("examPdfPreview");
+const examPdfPreviewStatus = $("examPdfPreviewStatus");
+const examPdfPreviewBtn = $("examPdfPreviewBtn");
+let examPdfPreviewReady = false;
 const examWidth = $("examWidth");
 const examHeight = $("examHeight");
 const examMaxKB = $("examMaxKB");
@@ -1038,15 +1043,6 @@ const examMakeReady = $("examMakeReady");
 const examCheck = $("examCheck");
 const examQualitySummary = $("examQualitySummary");
 const examQualityCard = $("examQualityCard");
-const examBatchDownload = $("examBatchDownload");
-const batchPhoto = $("batchPhoto");
-const batchSignature = $("batchSignature");
-const batchThumb = $("batchThumb");
-const batchDeclaration = $("batchDeclaration");
-const dpiCmW = $("dpiCmW");
-const dpiCmH = $("dpiCmH");
-const dpiValue = $("dpiValue");
-const dpiResult = $("dpiResult");
 let activeTool = null;
 pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
@@ -1182,7 +1178,7 @@ function openTool(name){
     $("numberItalic")?.classList.remove("active");
     $("numberUnderline")?.classList.remove("active");
   }
-  if(name==="exam-resizer") resetExamResizer();
+  if(name==="exam-resizer") { resetExamResizer(); updateExamUploadMode(); }
   renderToolFiles();
   toolModal.classList.remove("hidden");
   toolModal.setAttribute("aria-hidden","false");
@@ -1235,11 +1231,20 @@ toolInput.addEventListener("change",async()=>{
   }
   if(activeTool==="exam-resizer" && toolFiles[0]){
     try{
-      examImage=await loadExamImage(toolFiles[0]);
-      examSourceInfo.textContent=`${toolFiles[0].name} • ${examImage.naturalWidth} × ${examImage.naturalHeight} px`;
-      examQualitySummary.textContent="Image loaded. Run Check quality or Make Exam Ready.";
-      updateExamPreview();
-      setExamValidation("Image loaded. Adjust crop, background, filter or sharpness, then download the validated output.","ok");
+      if(isExamPdfDoc()){
+        examImage=null;
+        const result=await validateExamPdf(toolFiles[0]);
+        examSourceInfo.textContent=`${toolFiles[0].name} • A4 • ${result.pages} page${result.pages===1?"":"s"} • ${result.sizeKB.toFixed(1)} KB`;
+        examQualitySummary.textContent="A4 PDF verified. Preview it before downloading.";
+        setExamValidation(`PDF verified ✓ • A4 • ${result.pages} page${result.pages===1?"":"s"} • ${result.sizeKB.toFixed(1)} KB`,"ok");
+        await renderExamPdfPreview(toolFiles[0]);
+      }else{
+        examImage=await loadExamImage(toolFiles[0]);
+        examSourceInfo.textContent=`${toolFiles[0].name} • ${examImage.naturalWidth} × ${examImage.naturalHeight} px`;
+        examQualitySummary.textContent="Image loaded. Run Check quality or Make Exam Ready.";
+        updateExamPreview();
+        setExamValidation("Image loaded. Adjust crop, background, filter or sharpness, then download the validated output.","ok");
+      }
     }catch(err){
       examImage=null;
       setExamValidation(err.message,"error");
@@ -1629,17 +1634,27 @@ const EXAM_PROFILES = {
   },
   ibps: {
     label: "IBPS",
-    source: "IBPS application instructions",
+    source: "IBPS CRP PO/MT-XVI Notification (30.06.2026), Annexure III",
     docs: {
-      photo: {w:200,h:230,maxKB:50,format:"jpeg",note:"Preferred photograph size: 200 × 230 pixels; 20–50 KB."},
-      signature: {w:140,h:60,maxKB:20,format:"jpeg",note:"Preferred signature size: 140 × 60 pixels; 10–20 KB."},
-      thumb: {w:240,h:240,maxKB:50,format:"jpeg",note:"Preferred left thumb impression size: 240 × 240 pixels (3 cm × 3 cm) at 200 DPI; 20–50 KB."},
-      declaration: {w:800,h:400,maxKB:100,format:"jpeg",note:"Preferred handwritten declaration size: 800 × 400 pixels (10 cm × 5 cm) at 200 DPI; 50–100 KB."}
+      photo: {w:200,h:230,minKB:20,maxKB:50,format:"jpeg",note:"Preferred photograph size: 200 × 230 pixels; 20–50 KB."},
+      signature: {w:140,h:60,minKB:10,maxKB:20,format:"jpeg",note:"Preferred signature size: 140 × 60 pixels; 10–20 KB."},
+      thumb: {w:240,h:240,minKB:20,maxKB:50,format:"jpeg",note:"Preferred left thumb impression size: 240 × 240 pixels (3 cm × 3 cm) at 200 DPI; 20–50 KB."},
+      declaration: {w:800,h:400,minKB:50,maxKB:100,format:"jpeg",note:"Preferred handwritten declaration size: 800 × 400 pixels (10 cm × 5 cm) at 200 DPI; 50–100 KB."},
+      "ssc-certificate": {kind:"pdf",maxKB:500,format:"pdf",pageSize:"A4",note:"PDF only; page size A4; file size must not exceed 500 KB."},
+      "jix-certificate": {kind:"pdf",maxKB:500,format:"pdf",pageSize:"A4",note:"PDF only; page size A4; file size must not exceed 500 KB. Upload only if applicable under Clause J(ix)."}
+    }
+  },
+  rrb: {
+    label: "Railway RRB",
+    source: "RRB CEN 06/2025 NTPC Graduate and CEN 07/2025 NTPC Undergraduate notifications",
+    docs: {
+      signature: {w:140,h:60,minKB:30,maxKB:49,format:"jpeg",note:"Signature: JPG/JPEG; 30–49 KB; minimum 140 × 60 pixels; minimum 100 DPI; black ink on white paper; running handwriting, not BLOCK/CAPITAL letters."},
+      "rrb-scst-certificate": {kind:"pdf",maxKB:400,maxExclusive:true,format:"pdf",pageSize:"PDF",note:"SC/ST certificate for candidates requesting Free Train Travel Pass; PDF only; file size must be less than 400 KB; certificate must be latest, valid, clear and readable."}
     }
   }
 };
 
-const EXAM_DOC_LABELS = {photo:"Photograph",signature:"Signature",declaration:"Declaration",thumb:"Left thumb impression"};
+const EXAM_DOC_LABELS = {photo:"Photograph",signature:"Signature",declaration:"Declaration",thumb:"Left thumb impression", "ssc-certificate":"SSC / SSLC / 10th Certificate", "jix-certificate":"Clause J(ix) Certificate", "rrb-scst-certificate":"RRB SC/ST Certificate"};
 let examImage = null;
 let examObjectUrl = null;
 let examCropMode = "auto";
@@ -1648,7 +1663,7 @@ let examAppliedCrop = null;
 let examCropPointer = {active:false,startX:0,startY:0,currentX:0,currentY:0};
 
 function examDefaultConfig(){
-  return {w:140,h:180,maxKB:40,format:"jpeg",note:"Enter the dimensions and size limit from the latest notification for this application."};
+  return {w:140,h:180,minKB:null,maxKB:40,format:"jpeg",note:"Enter the dimensions and size limit from the latest notification for this application."};
 }
 
 function setExamValidation(message,type=""){
@@ -1663,6 +1678,94 @@ function getExamConfig(){
   return doc ? {...examDefaultConfig(),...doc} : examDefaultConfig();
 }
 
+function isExamPdfDoc(){
+  const cfg=getExamConfig();
+  return cfg?.kind==="pdf";
+}
+
+function updateExamUploadMode(){
+  const pdfMode=isExamPdfDoc();
+  if(toolInput) toolInput.accept=pdfMode ? "application/pdf,.pdf" : "image/jpeg,image/png,image/webp,image/bmp";
+  if(toolChoose) toolChoose.textContent=pdfMode ? "Browse PDF" : "Browse image";
+  if(toolDropTitle) toolDropTitle.textContent=pdfMode ? "Choose a PDF" : "Choose an image";
+  if(toolDropHint) toolDropHint.textContent=pdfMode ? "PDF only • A4 • maximum 500 KB" : "JPG / JPEG / PNG / WEBP supported.";
+  if(toolRun && activeTool==="exam-resizer") toolRun.firstChild?.replaceWith(document.createTextNode(pdfMode ? "Download Validated PDF" : "Download Image"));
+  document.querySelectorAll("#examDocType option").forEach(opt=>{
+    if(opt.value==="ssc-certificate" || opt.value==="jix-certificate") opt.disabled=examProfile?.value!=="ibps";
+    if(opt.value==="rrb-scst-certificate") opt.disabled=examProfile?.value!=="rrb";
+  });
+  examPdfPreviewCard?.classList.toggle("hidden",!pdfMode);
+  if(!pdfMode){
+    examPdfPreviewReady=false;
+    if(examPdfPreview) examPdfPreview.innerHTML="";
+    if(examPdfPreviewStatus) examPdfPreviewStatus.textContent="Choose a PDF to preview.";
+  }
+  const imageSections=[document.querySelector("#examImageOutputOptions"),document.querySelector(".exam-adjust-card"),document.querySelector(".exam-final-card"),document.querySelector(".exam-compare-card"),document.querySelector(".exam-smart-row")];
+  imageSections.forEach(el=>el?.classList.toggle("hidden",pdfMode));
+  if(examQualityCard) examQualityCard.classList.toggle("hidden",pdfMode);
+}
+
+async function renderExamPdfPreview(file){
+  if(!file || !isExamPdfDoc()) return;
+  if(!examPdfPreview) return;
+  examPdfPreviewReady=false;
+  examPdfPreview.innerHTML='<div style="grid-column:1/-1;padding:22px;text-align:center;color:#6b7280;">Loading PDF preview…</div>';
+  if(examPdfPreviewStatus) examPdfPreviewStatus.textContent="Rendering preview…";
+  try{
+    const pdf=await loadPdfJsDocument(file);
+    const count=pdf.numPages;
+    const maxPages=Math.min(count,12);
+    examPdfPreview.innerHTML="";
+    for(let i=1;i<=maxPages;i++){
+      const page=await pdf.getPage(i);
+      const base=page.getViewport({scale:1});
+      const scale=Math.min(220/base.width,300/base.height);
+      const vp=page.getViewport({scale:Math.max(.35,scale)});
+      const card=document.createElement("div");
+      card.style.cssText="border:1px solid #e5e7eb;border-radius:14px;padding:8px;background:#f8fafc;box-shadow:0 2px 8px rgba(15,23,42,.05);";
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.ceil(vp.width);canvas.height=Math.ceil(vp.height);
+      canvas.style.cssText="display:block;width:100%;height:auto;background:#fff;border-radius:8px;";
+      const cap=document.createElement("div");
+      cap.textContent=`Page ${i}`;
+      cap.style.cssText="font:600 12px system-ui,sans-serif;color:#475569;text-align:center;padding:7px 2px 2px;";
+      card.append(canvas,cap);examPdfPreview.append(card);
+      await page.render({canvasContext:canvas.getContext("2d"),viewport:vp}).promise;
+    }
+    examPdfPreviewReady=true;
+    const more=count>maxPages ? ` Showing first ${maxPages} of ${count} pages.` : "";
+    if(examPdfPreviewStatus) examPdfPreviewStatus.textContent=`${count} page${count===1?"":"s"} previewed.${more}`;
+  }catch(err){
+    examPdfPreview.innerHTML=`<div style="grid-column:1/-1;padding:18px;color:#b91c1c;background:#fef2f2;border-radius:12px;">Could not preview this PDF. ${err?.message||"Please try another PDF."}</div>`;
+    if(examPdfPreviewStatus) examPdfPreviewStatus.textContent="Preview failed.";
+  }
+}
+
+function validateExamPdf(file){
+  return (async()=>{
+    if(!file) throw new Error("Please choose a PDF file.");
+    const cfg=getExamConfig();
+    const maxKB=Number(cfg.maxKB)||500;
+    const sizeKB=file.size/1024;
+    const tooLarge=cfg.maxExclusive ? sizeKB>=maxKB : sizeKB>maxKB;
+    if(tooLarge){
+      const limitText=cfg.maxExclusive ? `less than ${maxKB} KB` : `at or below ${maxKB} KB`;
+      throw new Error(`PDF is ${sizeKB.toFixed(1)} KB. It must be ${limitText}.`);
+    }
+    const pdf=await ensurePDFLib().PDFDocument.load(await readBytes(file),{ignoreEncryption:false});
+    const pages=pdf.getPages();
+    if(!pages.length) throw new Error("The PDF has no pages.");
+    const A4W=595.28,A4H=841.89,tol=3;
+    const isA4=(w,h)=>(Math.abs(w-A4W)<=tol && Math.abs(h-A4H)<=tol)||(Math.abs(w-A4H)<=tol && Math.abs(h-A4W)<=tol);
+    const wrong=pages.findIndex(page=>!isA4(page.getWidth(),page.getHeight()));
+    if(wrong>=0){
+      const page=pages[wrong],w=page.getWidth(),h=page.getHeight();
+      throw new Error(`Page ${wrong+1} is ${w.toFixed(1)} × ${h.toFixed(1)} pt, not A4. Please upload an A4 PDF.`);
+    }
+    return {pages:pages.length,sizeKB};
+  })();
+}
+
 function updateExamRequirement(){
   if(!examRequirementCard) return;
   const profile=EXAM_PROFILES[examProfile?.value];
@@ -1674,18 +1777,23 @@ function updateExamRequirement(){
   }else if(!doc){
     examRequirementCard.innerHTML=`<strong>${profile.label} · ${docLabel}</strong><br>No fixed profile is stored for this document type. Enter the exact values from the current notification.`;
   }else{
-    const dims=cfg.w&&cfg.h ? `${cfg.w} × ${cfg.h} px` : "No fixed pixel size stated in the selected source";
-    const size=cfg.maxKB ? `Maximum ${cfg.maxKB} KB` : "File-size limit not specified in the selected source";
+    const dims=cfg.kind==="pdf" ? "A4 PDF" : (cfg.w&&cfg.h ? `${cfg.w} × ${cfg.h} px` : "No fixed pixel size stated in the selected source");
+    const size=cfg.minKB && cfg.maxKB ? `${cfg.minKB}–${cfg.maxKB} KB` : (cfg.maxKB ? (cfg.maxExclusive ? `Less than ${cfg.maxKB} KB` : `Maximum ${cfg.maxKB} KB`) : "File-size limit not specified in the selected source");
     examRequirementCard.innerHTML=`<strong>${profile.label} · ${docLabel}</strong><br>${dims} · ${size}<br><span>${cfg.note}</span><br><small>Source: ${profile.source}. Requirements can vary by recruitment/application.</small>`;
   }
   if(cfg.w) examWidth.value=cfg.w;
   if(cfg.h) examHeight.value=cfg.h;
   if(cfg.maxKB) examMaxKB.value=cfg.maxKB;
-  if(cfg.format) examFormat.value=cfg.format;
-  updateExamPreview();
+  if(cfg.format && cfg.kind!=="pdf") examFormat.value=cfg.format;
+  updateExamUploadMode();
+  if(!cfg.kind || cfg.kind!=="pdf") updateExamPreview();
+  else setExamValidation(cfg.maxExclusive ? `Ready. Select the PDF and keep it below ${cfg.maxKB} KB.` : `Ready. Select the A4 PDF and keep it at or below ${cfg.maxKB} KB.`);
 }
 
 function resetExamResizer(){
+  examPdfPreviewReady=false;
+  if(examPdfPreview) examPdfPreview.innerHTML="";
+  if(examPdfPreviewStatus) examPdfPreviewStatus.textContent="Choose a PDF to preview.";
   examImage=null;
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
   examCropMode="auto";
@@ -1711,7 +1819,6 @@ function resetExamResizer(){
   if(ctx){ctx.clearRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);}
   updateExamRequirement();
   updateExamComparison();
-  updateDpiResult();
   examQualityCard?.classList.add("hidden");
   examQualitySummary.textContent="Upload an image for a quality check.";
   setExamValidation("Ready. Your image will be processed only in this browser.");
@@ -2092,11 +2199,6 @@ function runExamQualityCheck(blob){
   examQualityCard.classList.remove("hidden");
 }
 
-function updateDpiResult(){
-  const w=Math.max(0,Number(dpiCmW?.value)||0),h=Math.max(0,Number(dpiCmH?.value)||0),dpi=Math.max(1,Number(dpiValue?.value)||1);
-  if(dpiResult) dpiResult.textContent=`${Math.round(w/2.54*dpi)} × ${Math.round(h/2.54*dpi)} px`;
-}
-
 function makeExamReady(){
   if(!examImage){setExamValidation("Please choose an image first.","error");return;}
   setExamCropMode("auto");
@@ -2106,27 +2208,6 @@ function makeExamReady(){
   examSharpness.value="medium";
   updateExamPreview();
   setExamValidation("Exam-ready adjustments applied. Review the crop before downloading.","ok");
-}
-
-async function createBatchExamZip(){
-  if(typeof JSZip==="undefined") throw new Error("ZIP support could not be loaded. Please refresh the page and try again.");
-  const jobs=[[batchPhoto,"photo"],[batchSignature,"signature"],[batchThumb,"thumb"],[batchDeclaration,"declaration"]].filter(([input])=>input?.files?.[0]);
-  if(!jobs.length) throw new Error("Select at least one IBPS document for the ZIP.");
-  const zip=new JSZip();
-  for(const [input,type] of jobs){
-    const file=input.files[0],cfg=EXAM_PROFILES.ibps.docs[type];
-    const old={image:examImage,w:examWidth.value,h:examHeight.value,max:examMaxKB.value,format:examFormat.value,bg:examBackground.value,filter:examFilter.value,sharp:examSharpness.value,zoom:examZoom.value,ox:examOffsetX.value,oy:examOffsetY.value};
-    try{
-      examImage=await loadExamImage(file);
-      examWidth.value=cfg.w;examHeight.value=cfg.h;examMaxKB.value=cfg.maxKB;examFormat.value=cfg.format;
-      examBackground.value="white";examFilter.value=type==="photo"?"original":"clean";examSharpness.value="medium";examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";
-      const blob=await createExamBlob();
-      zip.file(`IBPS_${EXAM_DOC_LABELS[type].replace(/[^a-z0-9]+/gi,"_")}.${cfg.format==="png"?"png":"jpg"}`,blob);
-    }finally{
-      examImage=old.image;examWidth.value=old.w;examHeight.value=old.h;examMaxKB.value=old.max;examFormat.value=old.format;examBackground.value=old.bg;examFilter.value=old.filter;examSharpness.value=old.sharp;examZoom.value=old.zoom;examOffsetX.value=old.ox;examOffsetY.value=old.oy;
-    }
-  }
-  return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
 }
 
 function resetExamCrop(){
@@ -2196,10 +2277,13 @@ async function createExamBlob(){
   applyExamImageAdjustments(canvas);
   const format=examFormat.value;
   const maxBytes=Math.max(0,(Number(examMaxKB.value)||0)*1024);
+  const minKB=getExamConfig().minKB;
+  const minBytes=minKB ? minKB*1024 : 0;
   if(format==="png"){
     const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
     if(!blob) throw new Error("Could not create the PNG image.");
     if(maxBytes && blob.size>maxBytes) throw new Error(`PNG is ${Math.ceil(blob.size/1024)} KB, above the ${Number(examMaxKB.value)} KB limit. Use JPG/JPEG or change the target size only if the notification permits it.`);
+    if(minBytes && blob.size<minBytes) throw new Error(`PNG is ${(blob.size/1024).toFixed(1)} KB, below the ${minKB} KB minimum. JPG/JPEG may be more suitable if the notification permits it.`);
     return blob;
   }
   if(!maxBytes){
@@ -2217,6 +2301,9 @@ async function createExamBlob(){
     if(!blob || blob.size>maxBytes) throw new Error(`The exact ${crop.tw} × ${crop.th} dimensions cannot be compressed below ${Number(examMaxKB.value)} KB without changing the required dimensions.`);
     best=blob;
   }
+  if(minBytes && best.size<minBytes){
+    throw new Error(`Final JPG is ${(best.size/1024).toFixed(1)} KB, below the ${minKB} KB minimum required for ${EXAM_DOC_LABELS[examDocType.value]}. Try a less aggressive crop or use a clearer source image.`);
+  }
   return best;
 }
 function downloadExamBlob(blob){
@@ -2229,7 +2316,15 @@ function downloadExamBlob(blob){
   setTimeout(()=>URL.revokeObjectURL(url),1800);
 }
 
-[examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
+[examProfile,examDocType].forEach(el=>el?.addEventListener("change",()=>{
+  const ibpsOnly=["ssc-certificate","jix-certificate"].includes(examDocType?.value);
+  const rrbOnly=examDocType?.value==="rrb-scst-certificate";
+  if((ibpsOnly && examProfile?.value!=="ibps") || (rrbOnly && examProfile?.value!=="rrb")){
+    examDocType.value=examProfile?.value==="rrb" ? "signature" : "photo";
+  }
+  toolFiles=[]; toolInput.value=""; examImage=null; examAppliedCrop=null; examManualCrop=null;
+  updateExamRequirement();
+}));
 [examWidth,examHeight].forEach(el=>el?.addEventListener("input",()=>{examAppliedCrop=null;updateExamPreview();}));
 [examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
 [examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("change",updateExamPreview));
@@ -2240,23 +2335,14 @@ examSaveCrop?.addEventListener("click",saveCurrentCrop);
 examResetCrop?.addEventListener("click",resetExamCrop);
 examLockCropRatio?.addEventListener("change",()=>{if(examCropMode==="manual") updateExamPreview();});
 bindManualCropEditor();
+examPdfPreviewBtn?.addEventListener("click",async()=>{
+  if(!toolFiles[0] || !isExamPdfDoc()){setExamValidation("Please choose a PDF first.","error");return;}
+  try{await validateExamPdf(toolFiles[0]);await renderExamPdfPreview(toolFiles[0]);}
+  catch(err){setExamValidation(err.message||"PDF validation failed.","error");}
+});
 examMakeReady?.addEventListener("click",makeExamReady);
 examCheck?.addEventListener("click",async()=>{try{const blob=await createExamBlob();runExamQualityCheck(blob);}catch(err){setExamValidation(err.message||"Quality check failed.","error");}});
 examCompareRange?.addEventListener("input",updateExamComparison);
-[batchPhoto,batchSignature,batchThumb,batchDeclaration].forEach(el=>el?.addEventListener("change",()=>{const n=[batchPhoto,batchSignature,batchThumb,batchDeclaration].filter(x=>x?.files?.[0]).length;if(examQualitySummary&&!examImage)examQualitySummary.textContent=`${n} IBPS document${n===1?"":"s"} selected for batch ZIP.`;}));
-examBatchDownload?.addEventListener("click",async()=>{
-  examBatchDownload.disabled=true;
-  try{
-    setExamValidation("Preparing IBPS ZIP…");
-    const blob=await createBatchExamZip();
-    const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="PDFMines_IBPS_Exam_Documents.zip";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1800);
-    setExamValidation(`IBPS package ready • ${(blob.size/1024).toFixed(1)} KB • Downloaded ✓`,"ok");
-  }catch(err){setExamValidation(err.message||"Could not create the ZIP.","error");}
-  finally{examBatchDownload.disabled=false;}
-});
-[dpiCmW,dpiCmH,dpiValue].forEach(el=>el?.addEventListener("input",updateDpiResult));
-updateDpiResult();
-
 
 function cropSummary(){
   const c=getExamCrop();
@@ -2266,7 +2352,21 @@ function cropSummary(){
 toolRun.onclick=async()=>{
   if(!activeTool) return;
   if(activeTool==="exam-resizer") {
-    if(!toolFiles.length){setExamValidation("Please choose an image first.","error");return;}
+    if(!toolFiles.length){setExamValidation(isExamPdfDoc()?"Please choose a PDF first.":"Please choose an image first.","error");return;}
+    if(isExamPdfDoc()){
+      toolRun.disabled=true;
+      try{
+        const result=await validateExamPdf(toolFiles[0]);
+        if(!examPdfPreviewReady) await renderExamPdfPreview(toolFiles[0]);
+        const bytes=await readBytes(toolFiles[0]);
+        downloadToolBytes(bytes,`PDFMines_${examDocType.value}.pdf`);
+        const cfg=getExamConfig();
+        const limitText=cfg.maxExclusive ? `< ${cfg.maxKB} KB` : `≤ ${cfg.maxKB} KB`;
+        setExamValidation(`PDF verified ✓ • A4 • ${result.pages} page${result.pages===1?"":"s"} • ${result.sizeKB.toFixed(1)} KB / ${limitText} • Downloaded ✓`,"ok");
+      }catch(err){setExamValidation(err.message||"PDF validation failed.","error");}
+      finally{toolRun.disabled=false;}
+      return;
+    }
     if(!examImage){setExamValidation("The selected image is still loading or could not be read.","error");return;}
     toolRun.disabled=true;
     setExamValidation("Preparing final image…");
