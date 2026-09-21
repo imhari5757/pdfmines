@@ -7,7 +7,7 @@
 <title>PDFMines — Fast PDF Tools</title>
 <link rel="stylesheet" href="style.css">
 <style>
-.exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}
+.exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}.exam-live-crop-dimensions{margin:8px 0 2px;padding:9px 12px;border-radius:10px;background:#f5f7fb;color:#1e293b;font-weight:800;font-size:.82rem;text-align:center;font-variant-numeric:tabular-nums}.exam-live-crop-dimensions small{font-weight:600;opacity:.65}
 </style>
 </head>
 <body>
@@ -152,6 +152,7 @@
           <span id="examCropHint">Choose Auto Crop or Rectangle Crop.</span>
         </div>
         <div class="exam-preview-wrap exam-crop-editor"><canvas id="examPreviewCanvas" width="420" height="300"></canvas><div id="examPreviewEmpty">Image preview</div></div>
+        <div id="examLiveCropDimensions" class="exam-live-crop-dimensions">Selection: —</div>
         <div class="exam-manual-note" id="examManualNote">Manual mode: first drag to draw a rectangle. After it is drawn, drag inside the rectangle to move it, or drag outside to draw a new one.</div>
         <div class="exam-crop-save-row"><button id="examSaveCrop" class="btn primary small" type="button">✓ Save Crop</button><button id="examResetCrop" class="btn secondary small" type="button">↩ Reset Crop</button><span id="examSaveCropHint">Save the current crop and continue with enhancement.</span></div>
         <div class="exam-slider-grid">
