@@ -1838,7 +1838,13 @@ function bindManualCropEditor(){
     if(examCropMode!=="manual"||!examImage) return;
     e.preventDefault();
     const pt=previewToSourcePoint(e.clientX,e.clientY,canvas);
-    examCropPointer={active:true,startX:pt.x,startY:pt.y,currentX:pt.x,currentY:pt.y};
+    const sw=examImage.naturalWidth||examImage.width;
+    const sh=examImage.naturalHeight||examImage.height;
+    const x=Math.max(0,Math.min(sw-1,pt.x));
+    const y=Math.max(0,Math.min(sh-1,pt.y));
+    examCropPointer={active:true,startX:x,startY:y,currentX:x,currentY:y};
+    examManualCrop={x,y,w:1,h:1};
+    drawManualEditor();
     try{canvas.setPointerCapture(e.pointerId);}catch(_){ }
   });
   canvas.addEventListener("pointermove",e=>{
@@ -1846,13 +1852,24 @@ function bindManualCropEditor(){
     const pt=previewToSourcePoint(e.clientX,e.clientY,canvas);
     examCropPointer.currentX=pt.x;examCropPointer.currentY=pt.y;
     const rect=normalizeManualRect({x:examCropPointer.startX,y:examCropPointer.startY},{x:pt.x,y:pt.y});
-    if(rect) examManualCrop=rect;
+    if(rect){
+      examManualCrop=rect;
+    }else{
+      examManualCrop={x:examCropPointer.startX,y:examCropPointer.startY,w:1,h:1};
+    }
     drawManualEditor();
   });
   const finish=e=>{
     if(!examCropPointer.active) return;
     examCropPointer.active=false;
     try{canvas.releasePointerCapture(e.pointerId);}catch(_){ }
+    const crop=examManualCrop;
+    if(!crop||crop.w<5||crop.h<5){
+      examManualCrop=null;
+      drawManualEditor();
+      setExamValidation("Drag across the image to select the crop area.","warn");
+      return;
+    }
     updateExamPreview();
   };
   canvas.addEventListener("pointerup",finish);
