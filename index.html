@@ -6,6 +6,9 @@
 <meta name="description" content="PDFMines — fast, private PDF tools.">
 <title>PDFMines — Fast PDF Tools</title>
 <link rel="stylesheet" href="style.css">
+<style>
+.exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -128,21 +131,11 @@
             <option value="signature">Signature</option>
             <option value="declaration">Declaration</option>
             <option value="thumb">Left thumb impression</option>
-            <option value="ssc-certificate" disabled>SSC / SSLC / 10th Certificate (PDF)</option>
-            <option value="jix-certificate" disabled>Clause J(ix) Certificate (PDF, if applicable)</option>
-            <option value="rrb-scst-certificate" disabled>RRB SC/ST Certificate — Free Train Travel Pass (PDF)</option>
           </select>
         </label>
       </div>
       <div id="examRequirementCard" class="exam-requirement-card"></div>
-      <div id="examPdfPreviewCard" class="exam-pdf-preview-card hidden" style="margin:14px 0;padding:16px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div><strong>PDF Preview</strong><div id="examPdfPreviewStatus" style="font-size:13px;color:#6b7280;margin-top:4px;">Choose a PDF to preview.</div></div>
-          <button id="examPdfPreviewBtn" class="btn secondary small" type="button">Preview PDF</button>
-        </div>
-        <div id="examPdfPreview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px;"></div>
-      </div>
-      <div class="exam-grid" id="examImageOutputOptions">
+      <div class="exam-grid">
         <label class="tool-option">Width (px)<input id="examWidth" type="number" min="1" max="6000" value="140"></label>
         <label class="tool-option">Height (px)<input id="examHeight" type="number" min="1" max="6000" value="180"></label>
         <label class="tool-option">Max file size (KB)<input id="examMaxKB" type="number" min="1" max="10000" value="40"></label>
@@ -162,15 +155,11 @@
         <div class="exam-manual-note" id="examManualNote">Manual mode: first drag to draw a rectangle. After it is drawn, drag inside the rectangle to move it, or drag outside to draw a new one.</div>
         <div class="exam-crop-save-row"><button id="examSaveCrop" class="btn primary small" type="button">✓ Save Crop</button><button id="examResetCrop" class="btn secondary small" type="button">↩ Reset Crop</button><span id="examSaveCropHint">Save the current crop and continue with enhancement.</span></div>
         <div class="exam-slider-grid">
-          <div class="exam-zoom-control" style="grid-column:1/-1;padding:4px 0 2px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:700;">
-              <span>Zoom</span><span id="examZoomValue" style="min-width:58px;text-align:center;">0%</span>
-            </div>
-            <input id="examZoom" type="range" min="-20" max="20" step="0.5" value="0" aria-label="Zoom from minus 20 percent to plus 20 percent" style="width:100%;">
-            <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#64748b;margin-top:2px;">
-              <span>−20% Zoom out</span><span>0% Original</span><span>+20% Zoom in</span>
-            </div>
-          </div>
+          <label class="exam-zoom-control">
+            <span class="exam-slider-label"><span>Zoom</span><output id="examZoomValue">0%</output></span>
+            <span class="exam-zoom-track"><span>−20%</span><input id="examZoom" type="range" min="-100" max="100" step="0.5" value="0"><span>+20%</span></span>
+            <span class="exam-slider-subnote"><span>Zoom out</span><span>0% = original</span><span>Zoom in</span></span>
+          </label>
           <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.005" value="0"></label>
           <label>Vertical <input id="examOffsetY" type="range" min="-1" max="1" step="0.005" value="0"></label>
         </div>
