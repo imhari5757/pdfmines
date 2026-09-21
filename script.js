@@ -1019,6 +1019,11 @@ const examBackground = $("examBackground");
 const examFilter = $("examFilter");
 const examSharpness = $("examSharpness");
 const examAutoFit = $("examAutoFit");
+const examAutoCropMode = $("examAutoCropMode");
+const examManualCropMode = $("examManualCropMode");
+const examLockCropRatio = $("examLockCropRatio");
+const examCropHint = $("examCropHint");
+const examManualNote = $("examManualNote");
 const examValidation = $("examValidation");
 const examBeforeCanvas = $("examBeforeCanvas");
 const examAfterCanvas = $("examAfterCanvas");
@@ -1631,6 +1636,9 @@ const EXAM_PROFILES = {
 const EXAM_DOC_LABELS = {photo:"Photograph",signature:"Signature",declaration:"Declaration",thumb:"Left thumb impression"};
 let examImage = null;
 let examObjectUrl = null;
+let examCropMode = "auto";
+let examManualCrop = null;
+let examCropPointer = {active:false,startX:0,startY:0,currentX:0,currentY:0};
 
 function examDefaultConfig(){
   return {w:140,h:180,maxKB:40,format:"jpeg",note:"Enter the dimensions and size limit from the latest notification for this application."};
@@ -1673,6 +1681,9 @@ function updateExamRequirement(){
 function resetExamResizer(){
   examImage=null;
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
+  examCropMode="auto";
+  examManualCrop=null;
+  examCropPointer={active:false,startX:0,startY:0,currentX:0,currentY:0};
   examZoom.value="1"; examOffsetX.value="0"; examOffsetY.value="0";
   examBackground.value=examDocType.value==="photo" ? "original" : "white";
   examFilter.value=examDocType.value==="photo" ? "original" : "clean";
@@ -1683,6 +1694,7 @@ function resetExamResizer(){
   if(cfg.maxKB) examMaxKB.value=cfg.maxKB;
   if(cfg.format) examFormat.value=cfg.format;
   examSourceInfo.textContent="Choose an image to begin.";
+  setExamCropMode("auto");
   examPreviewEmpty.classList.remove("hidden");
   const ctx=examPreviewCanvas?.getContext("2d");
   if(ctx){ctx.clearRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);}
@@ -1711,6 +1723,15 @@ function getExamCrop(){
   const tw=Math.max(1,Number(examWidth.value)||140);
   const th=Math.max(1,Number(examHeight.value)||180);
   const aspect=tw/th;
+
+  if(examCropMode==="manual" && examManualCrop){
+    const x=Math.max(0,Math.min(sw-1,examManualCrop.x));
+    const y=Math.max(0,Math.min(sh-1,examManualCrop.y));
+    const w=Math.max(1,Math.min(sw-x,examManualCrop.w));
+    const h=Math.max(1,Math.min(sh-y,examManualCrop.h));
+    return {x,y,w,h,sw,sh,tw,th};
+  }
+
   let cropW=sw, cropH=sw/aspect;
   if(cropH>sh){cropH=sh;cropW=sh*aspect;}
   const zoom=Math.max(1,Number(examZoom.value)||1);
@@ -1720,6 +1741,122 @@ function getExamCrop(){
   const x=Math.max(0,Math.min(maxX,(maxX/2)+(ox*maxX/2)));
   const y=Math.max(0,Math.min(maxY,(maxY/2)+(oy*maxY/2)));
   return {x,y,w:cropW,h:cropH,sw,sh,tw,th};
+}
+
+function sourceToPreviewPoint(x,y,canvas){
+  const sw=examImage.naturalWidth||examImage.width, sh=examImage.naturalHeight||examImage.height;
+  const scale=Math.min(canvas.width/sw,canvas.height/sh);
+  return {x:x*scale,y:y*scale,scale};
+}
+
+function previewToSourcePoint(clientX,clientY,canvas){
+  const rect=canvas.getBoundingClientRect();
+  const px=(clientX-rect.left)*(canvas.width/rect.width);
+  const py=(clientY-rect.top)*(canvas.height/rect.height);
+  const sw=examImage.naturalWidth||examImage.width, sh=examImage.naturalHeight||examImage.height;
+  const scale=Math.min(canvas.width/sw,canvas.height/sh);
+  const ox=(canvas.width-sw*scale)/2, oy=(canvas.height-sh*scale)/2;
+  return {x:(px-ox)/scale,y:(py-oy)/scale};
+}
+
+function normalizeManualRect(a,b){
+  const sw=examImage.naturalWidth||examImage.width, sh=examImage.naturalHeight||examImage.height;
+  let x1=Math.max(0,Math.min(sw,a.x)), x2=Math.max(0,Math.min(sw,b.x));
+  let y1=Math.max(0,Math.min(sh,a.y)), y2=Math.max(0,Math.min(sh,b.y));
+  let x=Math.min(x1,x2), y=Math.min(y1,y2), w=Math.abs(x2-x1), h=Math.abs(y2-y1);
+  if(examLockCropRatio.checked){
+    const aspect=Math.max(0.01,(Number(examWidth.value)||140)/(Number(examHeight.value)||180));
+    if(w>=h*aspect) h=w/aspect;
+    else w=h*aspect;
+    const sx=a.x<=b.x?x1:x1-w;
+    const sy=a.y<=b.y?y1:y1-h;
+    x=Math.max(0,Math.min(sw-w,sx));
+    y=Math.max(0,Math.min(sh-h,sy));
+  }
+  w=Math.min(w,sw-x); h=Math.min(h,sh-y);
+  if(w<5||h<5) return null;
+  return {x,y,w,h};
+}
+
+function drawManualEditor(){
+  if(!examPreviewCanvas||!examImage) return;
+  const canvas=examPreviewCanvas;
+  const sw=examImage.naturalWidth||examImage.width, sh=examImage.naturalHeight||examImage.height;
+  const scale=Math.min(420/sw,360/sh,1);
+  canvas.width=Math.max(1,Math.round(sw*scale));
+  canvas.height=Math.max(1,Math.round(sh*scale));
+  const ctx=canvas.getContext("2d",{alpha:false});
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.drawImage(examImage,0,0,sw,sh,0,0,canvas.width,canvas.height);
+  const crop=examManualCrop||getExamCrop();
+  if(!crop) return;
+  const p=sourceToPreviewPoint(crop.x,crop.y,canvas);
+  const w=crop.w*p.scale,h=crop.h*p.scale;
+  ctx.save();
+  ctx.fillStyle="rgba(10,15,30,.48)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(p.x,p.y,w,h);
+  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,p.x,p.y,w,h);
+  ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.strokeRect(p.x,p.y,w,h);ctx.setLineDash([]);
+  ctx.fillStyle="#fff";
+  [[p.x,p.y],[p.x+w,p.y],[p.x,p.y+h],[p.x+w,p.y+h]].forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();});
+  ctx.restore();
+}
+
+function setExamCropMode(mode){
+  examCropMode=mode;
+  if(mode==="manual"){
+    const current=getExamCrop();
+    examManualCrop=current?{x:current.x,y:current.y,w:current.w,h:current.h}:null;
+    examAutoCropMode?.classList.remove("active");
+    examManualCropMode?.classList.add("active");
+    if(examCropHint) examCropHint.textContent="Drag anywhere on the image to draw a rectangle. Drag again to replace it.";
+    examManualNote?.classList.add("visible");
+    examPreviewCanvas?.parentElement?.classList.add("manual");
+    if(examZoom) examZoom.disabled=true;
+    if(examOffsetX) examOffsetX.disabled=true;
+    if(examOffsetY) examOffsetY.disabled=true;
+  }else{
+    examManualCrop=null;
+    examAutoCropMode?.classList.add("active");
+    examManualCropMode?.classList.remove("active");
+    if(examCropHint) examCropHint.textContent="Auto crop uses the selected output aspect ratio. Zoom and position remain available.";
+    examManualNote?.classList.remove("visible");
+    examPreviewCanvas?.parentElement?.classList.remove("manual");
+    if(examZoom) examZoom.disabled=false;
+    if(examOffsetX) examOffsetX.disabled=false;
+    if(examOffsetY) examOffsetY.disabled=false;
+  }
+  updateExamPreview();
+}
+
+function bindManualCropEditor(){
+  const canvas=examPreviewCanvas;
+  if(!canvas) return;
+  canvas.addEventListener("pointerdown",e=>{
+    if(examCropMode!=="manual"||!examImage) return;
+    e.preventDefault();
+    const pt=previewToSourcePoint(e.clientX,e.clientY,canvas);
+    examCropPointer={active:true,startX:pt.x,startY:pt.y,currentX:pt.x,currentY:pt.y};
+    try{canvas.setPointerCapture(e.pointerId);}catch(_){ }
+  });
+  canvas.addEventListener("pointermove",e=>{
+    if(!examCropPointer.active||examCropMode!=="manual") return;
+    const pt=previewToSourcePoint(e.clientX,e.clientY,canvas);
+    examCropPointer.currentX=pt.x;examCropPointer.currentY=pt.y;
+    const rect=normalizeManualRect({x:examCropPointer.startX,y:examCropPointer.startY},{x:pt.x,y:pt.y});
+    if(rect) examManualCrop=rect;
+    drawManualEditor();
+  });
+  const finish=e=>{
+    if(!examCropPointer.active) return;
+    examCropPointer.active=false;
+    try{canvas.releasePointerCapture(e.pointerId);}catch(_){ }
+    updateExamPreview();
+  };
+  canvas.addEventListener("pointerup",finish);
+  canvas.addEventListener("pointercancel",finish);
 }
 
 function drawExamBase(canvas, crop){
@@ -1869,6 +2006,7 @@ function updateDpiResult(){
 
 function makeExamReady(){
   if(!examImage){setExamValidation("Please choose an image first.","error");return;}
+  setExamCropMode("auto");
   examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";
   examBackground.value="white";
   examFilter.value=examDocType.value==="photo"?"original":"clean";
@@ -1906,7 +2044,8 @@ function updateExamPreview(){
     return;
   }
   examPreviewEmpty?.classList.add("hidden");
-  renderExamCanvas(examPreviewCanvas,crop,420,360);
+  if(examCropMode==="manual") drawManualEditor();
+  else renderExamCanvas(examPreviewCanvas,crop,420,360);
   updateExamComparison();
   const kb=Number(examMaxKB.value)||0;
   setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
@@ -1956,7 +2095,11 @@ function downloadExamBlob(blob){
 [examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
 [examWidth,examHeight,examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
 [examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("change",updateExamPreview));
-examAutoFit?.addEventListener("click",()=>{examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();});
+examAutoFit?.addEventListener("click",()=>{setExamCropMode("auto");examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();});
+examAutoCropMode?.addEventListener("click",()=>setExamCropMode("auto"));
+examManualCropMode?.addEventListener("click",()=>setExamCropMode("manual"));
+examLockCropRatio?.addEventListener("change",()=>{if(examCropMode==="manual") updateExamPreview();});
+bindManualCropEditor();
 examMakeReady?.addEventListener("click",makeExamReady);
 examCheck?.addEventListener("click",async()=>{try{const blob=await createExamBlob();runExamQualityCheck(blob);}catch(err){setExamValidation(err.message||"Quality check failed.","error");}});
 examCompareRange?.addEventListener("input",updateExamComparison);
