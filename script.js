@@ -1808,7 +1808,7 @@ function drawManualEditor(){
   ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
   ctx.drawImage(examImage,0,0,sw,sh,0,0,canvas.width,canvas.height);
-  const crop=examManualCrop||getExamCrop();
+  const crop=examCropMode==="manual" ? examManualCrop : getExamCrop();
   if(!crop) return;
   const p=sourceToPreviewPoint(crop.x,crop.y,canvas);
   const w=crop.w*p.scale,h=crop.h*p.scale;
@@ -1840,11 +1840,11 @@ function drawManualEditor(){
 function setExamCropMode(mode,preserveApplied=false){
   examCropMode=mode;
   if(mode==="manual"){
-    const current=getExamCrop();
-    examManualCrop=current?{x:current.x,y:current.y,w:current.w,h:current.h}:null;
+    // Start manual mode with no pre-existing rectangle. The user must draw the first rectangle.
+    examManualCrop=null;
     examAutoCropMode?.classList.remove("active");
     examManualCropMode?.classList.add("active");
-    if(examCropHint) examCropHint.textContent="Drag to draw. Hover inside the rectangle until the hand cursor appears, then drag to move it.";
+    if(examCropHint) examCropHint.textContent="Drag on the image to draw a rectangle. After you draw it, drag inside to move it.";
     examManualNote?.classList.add("visible");
     examPreviewCanvas?.parentElement?.classList.add("manual");
     if(examZoom) examZoom.disabled=true;
@@ -2135,7 +2135,7 @@ function resetExamCrop(){
   examCropPointer={active:false,mode:"draw",startX:0,startY:0,currentX:0,currentY:0,offsetX:0,offsetY:0};
   examManualNote?.classList.remove("saved");
   if(examSaveCropHint) examSaveCropHint.textContent="Save the current crop and continue with enhancement.";
-  if(examCropHint) examCropHint.textContent=examCropMode==="manual" ? "Drag anywhere on the image to draw a rectangle. Drag again to replace it." : "Auto crop uses the selected output aspect ratio. Zoom and position remain available.";
+  if(examCropHint) examCropHint.textContent=examCropMode==="manual" ? (examManualCrop ? "Rectangle selected. Drag inside to move it, or drag outside to draw a new one." : "Drag on the image to draw a rectangle.") : "Auto crop uses the selected output aspect ratio. Zoom and position remain available.";
   updateExamPreview();
   setExamValidation("Crop reset. Adjust the crop and save it when ready.","warn");
 }
