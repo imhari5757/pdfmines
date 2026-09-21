@@ -189,26 +189,6 @@
         <span id="examQualitySummary">Upload an image for a quality check.</span>
       </div>
       <div class="exam-quality-card hidden" id="examQualityCard"></div>
-      <div class="exam-batch-card">
-        <div class="exam-compare-head"><b>IBPS — Prepare All Documents</b><span>Optional batch ZIP</span></div>
-        <div class="exam-batch-grid">
-          <label>Photograph<input id="batchPhoto" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
-          <label>Signature<input id="batchSignature" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
-          <label>Thumb impression<input id="batchThumb" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
-          <label>Handwritten declaration<input id="batchDeclaration" type="file" accept="image/*,.jpg,.jpeg,.png,.webp"></label>
-        </div>
-        <button id="examBatchDownload" class="btn secondary small" type="button">Download all as ZIP</button>
-        <small>Batch packaging uses the stored IBPS profile. Always compare against the latest official notification.</small>
-      </div>
-      <div class="exam-dpi-card">
-        <div class="exam-compare-head"><b>Pixel ↔ DPI helper</b><span>Useful when a notice gives cm and DPI</span></div>
-        <div class="exam-dpi-grid">
-          <label>Width (cm)<input id="dpiCmW" type="number" min="0" step="0.01" value="3"></label>
-          <label>Height (cm)<input id="dpiCmH" type="number" min="0" step="0.01" value="3"></label>
-          <label>DPI<input id="dpiValue" type="number" min="1" step="1" value="200"></label>
-          <div class="exam-dpi-result" id="dpiResult">200 × 200 px</div>
-        </div>
-      </div>
       <div class="exam-validation" id="examValidation"></div>
     </div>
 
@@ -344,6 +324,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=57"></script>
+<script src="script.js?v=64"></script>
 </body>
 </html>

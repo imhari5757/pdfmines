@@ -1874,7 +1874,7 @@ function saveCurrentCrop(){
   examAppliedCrop={x:crop.x,y:crop.y,w:crop.w,h:crop.h};
   examManualCrop=null;
   examManualNote?.classList.add("saved");
-  if(examCropHint) examCropHint.textContent="Crop saved ✓. You can enhance it now, or choose Manual rectangle to change it.";
+  if(examCropHint) examCropHint.textContent="Crop saved ✓. You can enhance it now. Any new rectangle is only a draft until you save it.";
   if(examSaveCropHint) examSaveCropHint.textContent="Crop saved ✓. You can now adjust background, filter and sharpness.";
   setExamValidation("Crop saved ✓. The selected area will be used for the final image.","ok");
   if(examReadyBadge){examReadyBadge.className="exam-ready-badge ready";examReadyBadge.textContent="READY TO EXPORT";}
@@ -2052,7 +2052,7 @@ function drawOriginalExamCanvas(canvas,crop,maxW=220,maxH=180){
 }
 
 function updateExamComparison(){
-  const crop=getExamCrop();
+  const crop=getExamCommittedCrop();
   if(!crop||!examImage) return;
   drawOriginalExamCanvas(examBeforeCanvas,crop);
   renderExamCanvas(examAfterCanvas,crop,220,180);
@@ -2140,6 +2140,22 @@ function resetExamCrop(){
   setExamValidation("Crop reset. Adjust the crop and save it when ready.","warn");
 }
 
+function getExamCommittedCrop(){
+  if(!examImage) return null;
+  if(examAppliedCrop){
+    const sw=examImage.naturalWidth||examImage.width;
+    const sh=examImage.naturalHeight||examImage.height;
+    const tw=Math.max(1,Number(examWidth.value)||140);
+    const th=Math.max(1,Number(examHeight.value)||180);
+    const x=Math.max(0,Math.min(sw-1,examAppliedCrop.x));
+    const y=Math.max(0,Math.min(sh-1,examAppliedCrop.y));
+    const w=Math.max(1,Math.min(sw-x,examAppliedCrop.w));
+    const h=Math.max(1,Math.min(sh-y,examAppliedCrop.h));
+    return {x,y,w,h,sw,sh,tw,th};
+  }
+  return getExamCrop();
+}
+
 function updateExamFinalPreview(crop){
   if(!examFinalCanvas||!crop||!examImage) return;
   renderExamCanvas(examFinalCanvas,crop,260,210);
@@ -2147,9 +2163,13 @@ function updateExamFinalPreview(crop){
   const limit=Number(examMaxKB.value)||0;
   if(examReadyBadge){
     examReadyBadge.className="exam-ready-badge ready";
-    examReadyBadge.textContent="READY TO EXPORT";
+    examReadyBadge.textContent=examAppliedCrop?"READY TO EXPORT":"READY TO EDIT";
   }
-  if(examReadyText) examReadyText.textContent=`Final output: ${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${limit?` • max ${limit} KB`:""}`;
+  if(examReadyText){
+    examReadyText.textContent=examAppliedCrop
+      ? `Saved crop • final output ${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${limit?` • max ${limit} KB`:""}`
+      : `Preview only • save the crop when ready • ${crop.tw} × ${crop.th} px`;
+  }
 }
 
 function updateExamPreview(){
@@ -2163,14 +2183,14 @@ function updateExamPreview(){
   if(examCropMode==="manual") drawManualEditor();
   else renderExamCanvas(examPreviewCanvas,crop,420,360);
   updateExamComparison();
-  updateExamFinalPreview(crop);
+  updateExamFinalPreview(getExamCommittedCrop());
   const kb=Number(examMaxKB.value)||0;
   setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
 }
 
 async function createExamBlob(){
   if(!examImage) throw new Error("Please choose an image first.");
-  const crop=getExamCrop();
+  const crop=getExamCommittedCrop();
   const canvas=document.createElement("canvas");
   drawExamBase(canvas,crop);
   applyExamImageAdjustments(canvas);
