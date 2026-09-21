@@ -141,10 +141,12 @@
       <div class="exam-adjust-card">
         <div class="exam-adjust-head"><b>Crop &amp; adjust</b><span id="examSourceInfo">Choose an image to begin.</span></div>
         <div class="exam-crop-mode-row">
-          <button id="examAutoCropMode" class="btn secondary small active" type="button">Auto crop</button>
-          <button id="examManualCropMode" class="btn secondary small" type="button">Manual rectangle</button>
+          <div class="exam-crop-mode-buttons" aria-label="Crop mode">
+            <button id="examAutoCropMode" class="btn secondary small active" type="button">↗ Auto Crop</button>
+            <button id="examManualCropMode" class="btn secondary small manual-crop-btn" type="button">▣ Rectangle Crop</button>
+          </div>
           <label class="exam-lock-ratio"><input id="examLockCropRatio" type="checkbox" checked> Lock output ratio</label>
-          <span id="examCropHint">Use zoom and position controls, or switch to Manual rectangle.</span>
+          <span id="examCropHint">Choose Auto Crop or Rectangle Crop.</span>
         </div>
         <div class="exam-preview-wrap exam-crop-editor"><canvas id="examPreviewCanvas" width="420" height="300"></canvas><div id="examPreviewEmpty">Image preview</div></div>
         <div class="exam-manual-note" id="examManualNote">Manual mode: drag to draw a rectangle. Hover inside it until the hand cursor appears, then drag to move it. Drag outside to draw a new one.</div>
