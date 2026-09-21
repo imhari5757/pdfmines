@@ -1234,12 +1234,25 @@ function closeTool(){
 function backFromTool(){ closeTool(); }
 
 document.querySelectorAll("[data-tool]").forEach(btn=>{
+  btn.type = "button";
   btn.addEventListener("click",e=>{
     e.preventDefault();
+    e.stopPropagation();
     const name=btn.dataset.tool;
     if(name) openTool(name);
   });
 });
+
+// Delegated fallback keeps toolbox cards clickable even if their DOM is rebuilt.
+document.addEventListener("click",e=>{
+  const btn=e.target.closest?.("[data-tool]");
+  if(!btn) return;
+  if(btn.dataset.tool) {
+    e.preventDefault();
+    e.stopPropagation();
+    openTool(btn.dataset.tool);
+  }
+},true);
 $("toolModalClose").onclick=closeTool;
 $("toolModalBack")?.addEventListener("click",backFromTool);
 document.querySelectorAll("[data-close-tool]").forEach(el=>el.onclick=closeTool);
