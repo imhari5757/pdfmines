@@ -1677,6 +1677,7 @@ let examImage = null;
 let examObjectUrl = null;
 let examCropMode = "auto";
 let examManualCrop = null;
+let examManualZoomBaseCrop = null;
 let examAppliedCrop = null;
 let examDraftAutoCrop = null;
 let examCropPointer = {active:false,mode:"draw",edge:null,startX:0,startY:0,currentX:0,currentY:0,offsetX:0,offsetY:0,baseCrop:null};
@@ -1724,6 +1725,7 @@ function resetExamResizer(){
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
   examCropMode="auto";
   examManualCrop=null;
+  examManualZoomBaseCrop=null;
   examAppliedCrop=null;
   examDraftAutoCrop=null;
   examCropPointer={active:false,mode:"draw",edge:null,startX:0,startY:0,currentX:0,currentY:0,offsetX:0,offsetY:0,baseCrop:null};
@@ -1772,11 +1774,30 @@ function getExamCrop(){
   const aspect=tw/th;
 
   if(examCropMode==="manual" && examManualCrop){
-    const x=Math.max(0,Math.min(sw-1,examManualCrop.x));
-    const y=Math.max(0,Math.min(sh-1,examManualCrop.y));
-    const w=Math.max(1,Math.min(sw-x,examManualCrop.w));
-    const h=Math.max(1,Math.min(sh-y,examManualCrop.h));
-    return {x,y,w,h,sw,sh,tw,th};
+    // Manual mode uses the rectangle as a fixed frame. Image Zoom and
+    // Horizontal/Vertical position change the image content inside that frame;
+    // they do not change the frame itself. This lets the user freely resize the
+    // frame (locked or unlocked) and then fine-tune the image inside it.
+    const base=examManualZoomBaseCrop || examManualCrop;
+    const frameX=Math.max(0,Math.min(sw-1,base.x));
+    const frameY=Math.max(0,Math.min(sh-1,base.y));
+    const frameW=Math.max(1,Math.min(sw-frameX,base.w));
+    const frameH=Math.max(1,Math.min(sh-frameY,base.h));
+    const zoomPct=Math.max(-100,Math.min(100,Number(examZoom?.value)||0));
+    const zoom=zoomPct>=0 ? 1+(zoomPct/50) : Math.max(0.2,1+(zoomPct/100));
+    let w=Math.max(1,frameW/zoom), h=Math.max(1,frameH/zoom);
+    if(w>sw || h>sh){
+      const fit=Math.min(sw/w,sh/h);
+      w*=fit; h*=fit;
+    }
+    const centerX=frameX+frameW/2, centerY=frameY+frameH/2;
+    const maxX=Math.max(0,sw-w), maxY=Math.max(0,sh-h);
+    const ox=Number(examOffsetX.value)||0, oy=Number(examOffsetY.value)||0;
+    let x=centerX-w/2 + (ox*maxX/2);
+    let y=centerY-h/2 + (oy*maxY/2);
+    x=Math.max(0,Math.min(maxX,x));
+    y=Math.max(0,Math.min(maxY,y));
+    return {x,y,w,h,sw,sh,tw,th,frame:{x:frameX,y:frameY,w:frameW,h:frameH}};
   }
 
   if(examCropMode!=="manual" && examDraftAutoCrop){
@@ -1944,41 +1965,43 @@ function drawManualEditor(){
   const ctx=canvas.getContext("2d",{alpha:false});
   ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  // Always show the complete uploaded image first. The rectangle is a frame;
+  // zoom/pan changes the image content displayed inside that frame.
   ctx.drawImage(examImage,0,0,sw,sh,0,0,canvas.width,canvas.height);
-  const crop=examCropMode==="manual" ? examManualCrop : getExamCrop();
-  if(!crop) return;
-  const p=sourceToPreviewPoint(crop.x,crop.y,canvas);
-  const w=crop.w*p.scale,h=crop.h*p.scale;
+
+  const frame=examManualCrop;
+  if(!frame) return;
+  const fp=sourceToPreviewPoint(frame.x,frame.y,canvas);
+  const fw=frame.w*fp.scale, fh=frame.h*fp.scale;
+  const visible=getExamCrop();
+
   ctx.save();
   ctx.fillStyle="rgba(10,15,30,.48)";
   ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.clearRect(p.x,p.y,w,h);
-  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,p.x,p.y,w,h);
-  ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.strokeRect(p.x,p.y,w,h);ctx.setLineDash([]);
-  ctx.fillStyle="#fff";
-  [[p.x,p.y],[p.x+w,p.y],[p.x,p.y+h],[p.x+w,p.y+h]].forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();});
-  drawCropHandles(ctx,crop,canvas);
+  ctx.clearRect(fp.x,fp.y,fw,fh);
 
-  if(examCropMode==="manual" && w>80 && h>42){
-    const label="✋  Drag to move";
+  // Render the currently zoomed/panned image content into the fixed frame.
+  if(visible){
+    ctx.drawImage(examImage,visible.x,visible.y,visible.w,visible.h,fp.x,fp.y,fw,fh);
+  }
+
+  ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.setLineDash([7,5]);
+  ctx.strokeRect(fp.x,fp.y,fw,fh);ctx.setLineDash([]);
+  drawCropHandles(ctx,frame,canvas);
+
+  if(fw>80 && fh>42){
+    const label=Number(examZoom?.value||0)!==0 ? "✋  Drag to move • Zoom active" : "✋  Drag to move";
     ctx.font="700 12px system-ui,-apple-system,Segoe UI,sans-serif";
-    const tw=ctx.measureText(label).width+24, th=30;
-    const lx=p.x+(w-tw)/2, ly=p.y+(h-th)/2;
-    ctx.fillStyle="rgba(15,23,42,.82)";
-    ctx.beginPath();
-    ctx.roundRect(lx,ly,tw,th,10);
-    ctx.fill();
-    ctx.fillStyle="#fff";
-    ctx.textAlign="center";ctx.textBaseline="middle";
-    ctx.fillText(label,lx+tw/2,ly+th/2+0.5);
+    const tw=Math.min(fw-8,ctx.measureText(label).width+24), th=30;
+    if(tw>70){
+      const lx=fp.x+(fw-tw)/2, ly=fp.y+(fh-th)/2;
+      ctx.fillStyle="rgba(15,23,42,.82)";
+      ctx.beginPath();ctx.roundRect(lx,ly,tw,th,10);ctx.fill();
+      ctx.fillStyle="#fff";ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillText(label,lx+tw/2,ly+th/2+0.5);
+    }
   }
   ctx.restore();
-}
-
-function updateExamZoomLabel(){
-  if(!examZoomValue) return;
-  const value=Number(examZoom?.value)||0;
-  examZoomValue.textContent=`${value>0?"+":""}${Number.isInteger(value)?value:value.toFixed(1)}%`;
 }
 
 function drawAutoEditor(){
@@ -2030,12 +2053,13 @@ function setExamCropMode(mode,preserveApplied=false){
     examManualCrop=null;
     examAutoCropMode?.classList.remove("active");
     examManualCropMode?.classList.add("active");
-    if(examCropHint) examCropHint.textContent="Drag on the image to draw a rectangle. After you draw it, drag inside to move it.";
+    if(examCropHint) examCropHint.textContent="Drag to draw. Resize from the 4 edge handles, drag inside to move, and use Image Zoom to adjust the picture inside the frame.";
     examManualNote?.classList.add("visible");
     examPreviewCanvas?.parentElement?.classList.add("manual");
-    if(examZoom) examZoom.disabled=true;
-    if(examOffsetX) examOffsetX.disabled=true;
-    if(examOffsetY) examOffsetY.disabled=true;
+    const hasManualFrame=!!examManualCrop;
+    if(examZoom) examZoom.disabled=!hasManualFrame;
+    if(examOffsetX) examOffsetX.disabled=!hasManualFrame;
+    if(examOffsetY) examOffsetY.disabled=!hasManualFrame;
   }else{
     if(!preserveApplied) examAppliedCrop=null;
     examManualCrop=null;
@@ -2053,16 +2077,24 @@ function setExamCropMode(mode,preserveApplied=false){
 }
 
 function saveCurrentCrop(){
-  const crop=examCropMode==="manual" ? examManualCrop : getExamCrop();
+  // In manual mode the frame is only the selection boundary; save the actual
+  // zoomed/panned image content currently visible inside that frame.
+  const crop=getExamCrop();
   if(!crop || crop.w<5 || crop.h<5){
     setExamValidation("Adjust the crop first, then save the crop.","warn");
     return;
   }
   examAppliedCrop={x:crop.x,y:crop.y,w:crop.w,h:crop.h};
   examManualCrop=null;
+  examManualZoomBaseCrop=null;
   examDraftAutoCrop=null;
   examManualNote?.classList.add("saved");
-  if(examCropHint) examCropHint.textContent="Crop saved ✓. You can enhance it now. Any new rectangle is only a draft until you save it.";
+  if(examCropMode==="manual"){
+    if(examZoom) examZoom.disabled=true;
+    if(examOffsetX) examOffsetX.disabled=true;
+    if(examOffsetY) examOffsetY.disabled=true;
+  }
+  if(examCropHint) examCropHint.textContent="Crop saved ✓. Resize the frame or use Image Zoom before saving again; unsaved changes never replace the saved preview.";
   if(examSaveCropHint) examSaveCropHint.textContent="Crop saved ✓. You can now adjust background, filter and sharpness.";
   setExamValidation("Crop saved ✓. The selected area will be used for the final image.","ok");
   if(examReadyBadge){examReadyBadge.className="exam-ready-badge ready";examReadyBadge.textContent="READY TO EXPORT";}
@@ -2127,7 +2159,7 @@ function bindManualCropEditor(){
     if(examCropPointer.mode==="resize" && examCropPointer.baseCrop){
       const resized=resizeExamCrop(examCropPointer.baseCrop,examCropPointer.edge,pt);
       if(resized){
-        if(examCropMode==="manual") examManualCrop=resized; else examDraftAutoCrop=resized;
+        if(examCropMode==="manual"){ examManualCrop=resized; examManualZoomBaseCrop={x:resized.x,y:resized.y,w:resized.w,h:resized.h}; } else examDraftAutoCrop=resized;
         updateLiveExamCropDimensions({...resized,tw:Number(examWidth.value)||140,th:Number(examHeight.value)||180},"resizing");
       }
       canvas.style.cursor=(examCropPointer.edge==="left"||examCropPointer.edge==="right")?"ew-resize":"ns-resize";
@@ -2136,15 +2168,18 @@ function bindManualCropEditor(){
       const x=Math.max(0,Math.min(sw-w,pt.x-examCropPointer.offsetX));
       const y=Math.max(0,Math.min(sh-h,pt.y-examCropPointer.offsetY));
       examManualCrop={x,y,w,h};
+      examManualZoomBaseCrop={x,y,w,h};
       updateLiveExamCropDimensions({...examManualCrop,tw:Number(examWidth.value)||140,th:Number(examHeight.value)||180},"selection");
       canvas.style.cursor="grabbing";
     }else if(examCropPointer.mode==="draw"){
       const rect=normalizeManualRect({x:examCropPointer.startX,y:examCropPointer.startY},{x:pt.x,y:pt.y});
       if(rect){
         examManualCrop=rect;
+        examManualZoomBaseCrop={x:rect.x,y:rect.y,w:rect.w,h:rect.h};
         updateLiveExamCropDimensions({...rect,tw:Number(examWidth.value)||140,th:Number(examHeight.value)||180},"selection");
       }else{
         examManualCrop={x:examCropPointer.startX,y:examCropPointer.startY,w:1,h:1};
+        examManualZoomBaseCrop=null;
       }
       canvas.style.cursor="crosshair";
     }
@@ -2160,10 +2195,19 @@ function bindManualCropEditor(){
     const crop=examCropMode==="manual" ? examManualCrop : (examDraftAutoCrop || getExamCrop());
     if(mode==="draw" && (!crop||crop.w<5||crop.h<5)){
       examManualCrop=null;
+      examManualZoomBaseCrop=null;
+      if(examZoom) examZoom.disabled=true;
+      if(examOffsetX) examOffsetX.disabled=true;
+      if(examOffsetY) examOffsetY.disabled=true;
       updateLiveExamCropDimensions(null);
       if(examCropMode==="manual") drawManualEditor();
       setExamValidation("Drag across the image to select a crop, or drag inside the rectangle to move it.","warn");
       return;
+    }
+    if(examCropMode==="manual"){
+      if(examZoom) examZoom.disabled=false;
+      if(examOffsetX) examOffsetX.disabled=false;
+      if(examOffsetY) examOffsetY.disabled=false;
     }
     updateLiveExamCropDimensions(crop,mode==="resize"?"selection":"selection");
     updateExamPreview();
@@ -2352,9 +2396,15 @@ async function createBatchExamZip(){
 function resetExamCrop(){
   examAppliedCrop=null;
   examManualCrop=null;
+  examManualZoomBaseCrop=null;
   examDraftAutoCrop=null;
   examCropPointer={active:false,mode:"draw",edge:null,startX:0,startY:0,currentX:0,currentY:0,offsetX:0,offsetY:0,baseCrop:null};
   examManualNote?.classList.remove("saved");
+  if(examCropMode==="manual"){
+    if(examZoom) examZoom.disabled=true;
+    if(examOffsetX) examOffsetX.disabled=true;
+    if(examOffsetY) examOffsetY.disabled=true;
+  }
   if(examSaveCropHint) examSaveCropHint.textContent="Save the current crop and continue with enhancement.";
   if(examCropHint) examCropHint.textContent=examCropMode==="manual" ? (examManualCrop ? "Rectangle selected. Drag inside to move it, or drag outside to draw a new one." : "Drag on the image to draw a rectangle.") : "Auto crop uses the selected output aspect ratio. Zoom and position remain available.";
   updateExamPreview();

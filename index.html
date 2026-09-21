@@ -149,16 +149,16 @@
             <button id="examManualCropMode" class="btn secondary small manual-crop-btn" type="button">▣ Rectangle Crop</button>
           </div>
           <label class="exam-lock-ratio"><input id="examLockCropRatio" type="checkbox" checked> Lock output ratio</label>
-          <span id="examCropHint">Choose Auto Crop or Rectangle Crop.</span>
+          <span id="examCropHint">Choose Auto Crop or Rectangle Crop. Lock ratio keeps the frame proportional; unlock it for a flexible shape.</span>
         </div>
         <div class="exam-preview-wrap exam-crop-editor"><canvas id="examPreviewCanvas" width="420" height="300"></canvas><div id="examPreviewEmpty">Image preview</div></div>
         <div id="examLiveCropDimensions" class="exam-live-crop-dimensions">Selection: —</div>
-        <div class="exam-manual-note" id="examManualNote">Manual mode: first drag to draw a rectangle. After it is drawn, drag inside the rectangle to move it, or drag outside to draw a new one.</div>
+        <div class="exam-manual-note" id="examManualNote">Manual mode: first drag to draw a rectangle. Then resize from the four edge handles, drag inside to move it, and use Image Zoom to adjust the picture inside the frame.</div>
         <div class="exam-crop-save-row"><button id="examSaveCrop" class="btn primary small" type="button">✓ Save Crop</button><button id="examResetCrop" class="btn secondary small" type="button">↩ Reset Crop</button><span id="examSaveCropHint">Save the current crop and continue with enhancement.</span></div>
         <div class="exam-slider-grid">
           <label class="exam-zoom-control">
-            <span class="exam-slider-label"><span>Zoom</span><output id="examZoomValue">0%</output></span>
-            <span class="exam-zoom-track"><span>−20%</span><input id="examZoom" type="range" min="-100" max="100" step="0.5" value="0"><span>+20%</span></span>
+            <span class="exam-slider-label"><span>Image Zoom</span><output id="examZoomValue">0%</output></span>
+            <span class="exam-zoom-track"><span>−100%</span><input id="examZoom" type="range" min="-100" max="100" step="0.5" value="0"><span>+100%</span></span>
             <span class="exam-slider-subnote"><span>Zoom out</span><span>0% = original</span><span>Zoom in</span></span>
           </label>
           <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.005" value="0"></label>
@@ -332,6 +332,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=67"></script>
+<script src="script.js?v=69"></script>
 </body>
 </html>
