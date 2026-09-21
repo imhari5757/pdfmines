@@ -79,6 +79,7 @@
     <article class="tool-card"><div class="tool-icon">🔄</div><h3>Rotate Pages</h3><p>Rotate all or selected PDF pages.</p><button class="tool-open" data-tool="rotate">Open tool →</button></article>
     <article class="tool-card"><div class="tool-icon">🔢</div><h3>Page Numbers</h3><p>Add clean page numbers to your PDF.</p><button class="tool-open" data-tool="number">Open tool →</button></article>
     <article class="tool-card"><div class="tool-icon">🖼️</div><h3>PDF → JPG / PNG</h3><p>Convert PDF pages into JPG, JPEG or PNG images.</p><button class="tool-open" data-tool="pdf2image">Open tool →</button></article>
+    <article class="tool-card"><div class="tool-icon">🪪</div><h3>Exam Photo &amp; Signature</h3><p>Resize, crop and compress application images to the required format.</p><button class="tool-open" data-tool="exam-resizer">Open tool →</button></article>
   </div>
 </section>
 
@@ -103,6 +104,52 @@
     </div>
 
     <div id="toolFiles" class="tool-file-list"></div>
+
+    <div id="examResizerOptions" class="exam-resizer-options hidden">
+      <div class="exam-tool-head">
+        <div><div class="number-options-title">Competitive Exam Image Resizer</div><p class="exam-note">Select the exam and document type. Always compare the final file with the latest official notification before uploading.</p></div>
+      </div>
+      <div class="exam-grid">
+        <label class="tool-option">Exam / portal
+          <select id="examProfile">
+            <option value="custom">Custom / Other</option>
+            <option value="upsc-recruitment">UPSC Recruitment</option>
+            <option value="ssc-2026">SSC 2026</option>
+            <option value="ibps">IBPS</option>
+            <option value="sbi">SBI</option>
+            <option value="rrb">Railway RRB</option>
+            <option value="jpsc">JPSC</option>
+            <option value="jssc">JSSC</option>
+          </select>
+        </label>
+        <label class="tool-option">Document type
+          <select id="examDocType">
+            <option value="photo">Photograph</option>
+            <option value="signature">Signature</option>
+            <option value="declaration">Declaration</option>
+            <option value="thumb">Left thumb impression</option>
+          </select>
+        </label>
+      </div>
+      <div id="examRequirementCard" class="exam-requirement-card"></div>
+      <div class="exam-grid">
+        <label class="tool-option">Width (px)<input id="examWidth" type="number" min="1" max="6000" value="140"></label>
+        <label class="tool-option">Height (px)<input id="examHeight" type="number" min="1" max="6000" value="180"></label>
+        <label class="tool-option">Max file size (KB)<input id="examMaxKB" type="number" min="1" max="10000" value="40"></label>
+        <label class="tool-option">Output format<select id="examFormat"><option value="jpeg">JPG / JPEG</option><option value="png">PNG</option></select></label>
+      </div>
+      <div class="exam-adjust-card">
+        <div class="exam-adjust-head"><b>Crop &amp; adjust</b><span id="examSourceInfo">Choose an image to begin.</span></div>
+        <div class="exam-preview-wrap"><canvas id="examPreviewCanvas" width="420" height="300"></canvas><div id="examPreviewEmpty">Image preview</div></div>
+        <div class="exam-slider-grid">
+          <label>Zoom <input id="examZoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+          <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.01" value="0"></label>
+          <label>Vertical <input id="examOffsetY" type="range" min="-1" max="1" step="0.01" value="0"></label>
+        </div>
+        <div class="exam-fit-row"><button id="examAutoFit" class="btn secondary small" type="button">Auto fit</button><span>Preview uses the exact output aspect ratio.</span></div>
+      </div>
+      <div class="exam-validation" id="examValidation"></div>
+    </div>
 
     <div id="toolOptions" class="tool-options">
       <div id="splitPagesWrap" class="split-options hidden">
@@ -236,6 +283,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=51"></script>
+<script src="script.js?v=52"></script>
 </body>
 </html>

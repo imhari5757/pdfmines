@@ -1001,6 +1001,22 @@ const pdfImageQualityWrap = $("pdfImageQualityWrap");
 const pdfImagePages = $("pdfImagePages");
 const pdfImagePreview = $("pdfImagePreview");
 const pdfImagePreviewStatus = $("pdfImagePreviewStatus");
+const examResizerOptions = $("examResizerOptions");
+const examProfile = $("examProfile");
+const examDocType = $("examDocType");
+const examRequirementCard = $("examRequirementCard");
+const examWidth = $("examWidth");
+const examHeight = $("examHeight");
+const examMaxKB = $("examMaxKB");
+const examFormat = $("examFormat");
+const examPreviewCanvas = $("examPreviewCanvas");
+const examPreviewEmpty = $("examPreviewEmpty");
+const examSourceInfo = $("examSourceInfo");
+const examZoom = $("examZoom");
+const examOffsetX = $("examOffsetX");
+const examOffsetY = $("examOffsetY");
+const examAutoFit = $("examAutoFit");
+const examValidation = $("examValidation");
 let activeTool = null;
 pdfImageFormat?.addEventListener("change",updatePdfImageFormatUI);
 
@@ -1077,6 +1093,13 @@ const TOOL_CONFIG = {
     accept:"application/pdf",
     multiple:false,
     action:"Convert PDF to Images"
+  },
+  "exam-resizer": {
+    title:"Exam Photo & Signature",
+    desc:"Resize, crop and compress application images in your browser.",
+    accept:"image/jpeg,image/png,image/webp,image/bmp",
+    multiple:false,
+    action:"Download Image"
   }
 };
 
@@ -1105,6 +1128,7 @@ function openTool(name){
   }
   numberOptionsWrap.classList.toggle("hidden",name!=="number");
   pdfImageOptions?.classList.toggle("hidden",name!=="pdf2image");
+  examResizerOptions?.classList.toggle("hidden",name!=="exam-resizer");
   if(name!=="pdf2image" && pdfImagePreview){
     pdfImagePreview.innerHTML="";
     if(pdfImagePreviewStatus) pdfImagePreviewStatus.textContent="Choose a PDF to preview.";
@@ -1128,6 +1152,7 @@ function openTool(name){
     $("numberItalic")?.classList.remove("active");
     $("numberUnderline")?.classList.remove("active");
   }
+  if(name==="exam-resizer") resetExamResizer();
   renderToolFiles();
   toolModal.classList.remove("hidden");
   toolModal.setAttribute("aria-hidden","false");
@@ -1540,6 +1565,223 @@ async function numberPdf(file){
 
 
 /* Camera/capture feature removed from the PDFMines UI. */
+
+
+/* Competitive exam image resizer */
+const EXAM_PROFILES = {
+  "upsc-recruitment": {
+    label: "UPSC Recruitment",
+    source: "UPSC Recruitment Branch FAQ",
+    docs: {
+      photo: {w:110,h:140,maxKB:40,format:"jpeg",note:"140 px height × 110 px width; each scanned image ≤ 40 KB."},
+      signature: {w:140,h:110,maxKB:40,format:"jpeg",note:"140 px width × 110 px height; each scanned image ≤ 40 KB."}
+    }
+  },
+  "ssc-2026": {
+    label: "SSC 2026",
+    source: "SSC 2026 notices",
+    docs: {
+      photo: {w:null,h:null,maxKB:null,format:"jpeg",note:"Several 2026 SSC applications use live photo capture rather than a fixed uploaded photo size."},
+      signature: {w:709,h:236,maxKB:20,format:"jpeg",note:"About 6.0 cm × 2.0 cm at 300 DPI; JPEG/JPG 10–20 KB. Pixel equivalent is approximately 709 × 236."}
+    }
+  }
+};
+
+const EXAM_DOC_LABELS = {photo:"Photograph",signature:"Signature",declaration:"Declaration",thumb:"Left thumb impression"};
+let examImage = null;
+let examObjectUrl = null;
+
+function examDefaultConfig(){
+  return {w:140,h:180,maxKB:40,format:"jpeg",note:"Enter the dimensions and size limit from the latest notification for this application."};
+}
+
+function setExamValidation(message,type=""){
+  if(!examValidation) return;
+  examValidation.className="exam-validation"+(type?` ${type}`:"");
+  examValidation.textContent=message;
+}
+
+function getExamConfig(){
+  const profile=EXAM_PROFILES[examProfile?.value];
+  const doc=profile?.docs?.[examDocType?.value];
+  return doc ? {...examDefaultConfig(),...doc} : examDefaultConfig();
+}
+
+function updateExamRequirement(){
+  if(!examRequirementCard) return;
+  const profile=EXAM_PROFILES[examProfile?.value];
+  const doc=profile?.docs?.[examDocType?.value];
+  const cfg=getExamConfig();
+  const docLabel=EXAM_DOC_LABELS[examDocType?.value] || "Image";
+  if(!profile){
+    examRequirementCard.innerHTML=`<strong>${docLabel}</strong><br>Custom mode: enter the exact width, height and file-size limit from the application notification.`;
+  }else if(!doc){
+    examRequirementCard.innerHTML=`<strong>${profile.label} · ${docLabel}</strong><br>No fixed profile is stored for this document type. Enter the exact values from the current notification.`;
+  }else{
+    const dims=cfg.w&&cfg.h ? `${cfg.w} × ${cfg.h} px` : "No fixed pixel size stated in the selected source";
+    const size=cfg.maxKB ? `Maximum ${cfg.maxKB} KB` : "File-size limit not specified in the selected source";
+    examRequirementCard.innerHTML=`<strong>${profile.label} · ${docLabel}</strong><br>${dims} · ${size}<br><span>${cfg.note}</span><br><small>Source: ${profile.source}. Requirements can vary by recruitment/application.</small>`;
+  }
+  if(cfg.w) examWidth.value=cfg.w;
+  if(cfg.h) examHeight.value=cfg.h;
+  if(cfg.maxKB) examMaxKB.value=cfg.maxKB;
+  if(cfg.format) examFormat.value=cfg.format;
+  updateExamPreview();
+}
+
+function resetExamResizer(){
+  examImage=null;
+  if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
+  examZoom.value="1"; examOffsetX.value="0"; examOffsetY.value="0";
+  const cfg=getExamConfig();
+  if(cfg.w) examWidth.value=cfg.w;
+  if(cfg.h) examHeight.value=cfg.h;
+  if(cfg.maxKB) examMaxKB.value=cfg.maxKB;
+  if(cfg.format) examFormat.value=cfg.format;
+  examSourceInfo.textContent="Choose an image to begin.";
+  examPreviewEmpty.classList.remove("hidden");
+  const ctx=examPreviewCanvas?.getContext("2d");
+  if(ctx){ctx.clearRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);}
+  updateExamRequirement();
+  setExamValidation("Ready. Your image will be processed only in this browser.");
+}
+
+function loadExamImage(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Could not read the selected image file."));};
+    img.src=url;
+  });
+}
+
+function getExamCrop(){
+  if(!examImage) return null;
+  const sw=examImage.naturalWidth||examImage.width;
+  const sh=examImage.naturalHeight||examImage.height;
+  const tw=Math.max(1,Number(examWidth.value)||140);
+  const th=Math.max(1,Number(examHeight.value)||180);
+  const aspect=tw/th;
+  let cropW=sw, cropH=sw/aspect;
+  if(cropH>sh){cropH=sh;cropW=sh*aspect;}
+  const zoom=Math.max(1,Number(examZoom.value)||1);
+  cropW=Math.max(1,cropW/zoom); cropH=Math.max(1,cropH/zoom);
+  const maxX=Math.max(0,sw-cropW), maxY=Math.max(0,sh-cropH);
+  const ox=Number(examOffsetX.value)||0, oy=Number(examOffsetY.value)||0;
+  const x=Math.max(0,Math.min(maxX,(maxX/2)+(ox*maxX/2)));
+  const y=Math.max(0,Math.min(maxY,(maxY/2)+(oy*maxY/2)));
+  return {x,y,w:cropW,h:cropH,sw,sh,tw,th};
+}
+
+function updateExamPreview(){
+  if(!examPreviewCanvas) return;
+  const crop=getExamCrop();
+  if(!crop){
+    examPreviewEmpty?.classList.remove("hidden");
+    return;
+  }
+  examPreviewEmpty?.classList.add("hidden");
+  const maxPreviewW=420,maxPreviewH=360;
+  const scale=Math.min(maxPreviewW/crop.tw,maxPreviewH/crop.th,1);
+  examPreviewCanvas.width=Math.max(1,Math.round(crop.tw*scale));
+  examPreviewCanvas.height=Math.max(1,Math.round(crop.th*scale));
+  const ctx=examPreviewCanvas.getContext("2d",{alpha:false});
+  ctx.imageSmoothingEnabled=true;
+  ctx.imageSmoothingQuality="high";
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,examPreviewCanvas.width,examPreviewCanvas.height);
+  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,examPreviewCanvas.width,examPreviewCanvas.height);
+  const kb=Number(examMaxKB.value)||0;
+  setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
+}
+
+async function createExamBlob(){
+  if(!examImage) throw new Error("Please choose an image first.");
+  const crop=getExamCrop();
+  const canvas=document.createElement("canvas");
+  canvas.width=crop.tw; canvas.height=crop.th;
+  const ctx=canvas.getContext("2d",{alpha:false});
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,crop.tw,crop.th);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+  ctx.drawImage(examImage,crop.x,crop.y,crop.w,crop.h,0,0,crop.tw,crop.th);
+  const format=examFormat.value;
+  const maxBytes=Math.max(0,(Number(examMaxKB.value)||0)*1024);
+  if(format==="png"){
+    const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
+    if(!blob) throw new Error("Could not create the PNG image.");
+    if(maxBytes && blob.size>maxBytes) throw new Error(`PNG is ${Math.ceil(blob.size/1024)} KB, above the ${Number(examMaxKB.value)} KB limit. Use JPG/JPEG or change the target size only if the notification permits it.`);
+    return blob;
+  }
+  if(!maxBytes){
+    return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not create the JPG image.")),"image/jpeg",0.92));
+  }
+  let low=0.1,high=0.98,best=null;
+  for(let i=0;i<8;i++){
+    const q=(low+high)/2;
+    const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",q));
+    if(!blob) throw new Error("Could not create the JPG image.");
+    if(blob.size<=maxBytes){best=blob;low=q;}else high=q;
+  }
+  if(!best){
+    const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",0.1));
+    if(!blob || blob.size>maxBytes) throw new Error(`The exact ${crop.tw} × ${crop.th} dimensions cannot be compressed below ${Number(examMaxKB.value)} KB without changing the required dimensions.`);
+    best=blob;
+  }
+  return best;
+}
+
+function downloadExamBlob(blob){
+  const doc=EXAM_DOC_LABELS[examDocType.value]||"Image";
+  const safe=doc.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  const ext=examFormat.value==="png"?"png":"jpg";
+  const a=document.createElement("a");
+  const url=URL.createObjectURL(blob);
+  a.href=url;a.download=`PDFMines_${safe}.${ext}`;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1800);
+}
+
+[examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
+[examWidth,examHeight,examMaxKB,examFormat,examZoom,examOffsetX,examOffsetY].forEach(el=>el?.addEventListener("input",updateExamPreview));
+examAutoFit?.addEventListener("click",()=>{
+  examZoom.value="1";examOffsetX.value="0";examOffsetY.value="0";updateExamPreview();
+});
+
+toolInput.addEventListener("change",async()=>{
+  if(activeTool!=="exam-resizer" || !toolFiles[0]) return;
+  try{
+    examImage=await loadExamImage(toolFiles[0]);
+    examSourceInfo.textContent=`${toolFiles[0].name} • ${examImage.naturalWidth} × ${examImage.naturalHeight} px`;
+    updateExamPreview();
+    setExamValidation("Image loaded. Adjust the crop if needed, then download the validated output.","ok");
+  }catch(err){
+    examImage=null;
+    setExamValidation(err.message,"error");
+  }
+});
+
+const originalToolRunHandler=toolRun.onclick;
+toolRun.onclick=async()=>{
+  if(activeTool!=="exam-resizer") return originalToolRunHandler?.();
+  if(!toolFiles.length){setExamValidation("Please choose an image first.","error");return;}
+  if(!examImage){setExamValidation("The selected image is still loading or could not be read.","error");return;}
+  toolRun.disabled=true;
+  setExamValidation("Preparing final image…");
+  try{
+    const blob=await createExamBlob();
+    downloadExamBlob(blob);
+    const limit=Number(examMaxKB.value)||0;
+    const kb=(blob.size/1024).toFixed(1);
+    const within=!limit || blob.size<=limit*1024;
+    setExamValidation(`${cropSummary()} • Final size ${kb} KB${limit?` / limit ${limit} KB`:""} • Downloaded ✓`,within?"ok":"warn");
+  }catch(err){
+    setExamValidation(err.message||"Could not create the image.","error");
+  }finally{toolRun.disabled=false;}
+};
+
+function cropSummary(){
+  const c=getExamCrop();
+  return c?`${c.tw} × ${c.th} px • ${examFormat.value.toUpperCase()}`:"Image ready";
+}
 
 toolRun.onclick=async()=>{
   if(!activeTool) return;

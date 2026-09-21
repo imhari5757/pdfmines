@@ -205,101 +205,44 @@ body.modal-open{overflow:hidden}
 .split-output-card small{font-size:11px;line-height:1.35;color:#7a8190;font-weight:500}
 @media(max-width:640px){.split-output-row{grid-template-columns:1fr}}
 
-/* Capture Images -> PDF */
+/* Competitive exam image resizer */
+.exam-resizer-options{display:grid;gap:14px;margin:14px 0 8px}
+.exam-tool-head{display:grid;gap:5px}
+.exam-note{margin:0;color:#707889;font-size:12px;line-height:1.45}
+.exam-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.exam-requirement-card{border:1px solid #dfe3ed;border-radius:14px;background:#f8f9ff;padding:13px 14px;color:#394154;font-size:12px;line-height:1.5}
+.exam-requirement-card strong{color:#20283a}
+.exam-adjust-card{border:1px solid #e5e8f0;border-radius:16px;padding:14px;background:#fff}
+.exam-adjust-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;font-size:13px}
+.exam-adjust-head span{color:#7a8190;font-size:11px;text-align:right}
+.exam-preview-wrap{position:relative;display:grid;place-items:center;min-height:260px;border-radius:13px;background:#f3f5f9;overflow:hidden;border:1px solid #e2e5ed}
+#examPreviewCanvas{display:block;max-width:100%;width:100%;height:auto;max-height:360px;object-fit:contain}
+#examPreviewEmpty{position:absolute;color:#858c9c;font-size:12px;pointer-events:none}
+.exam-slider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px}
+.exam-slider-grid label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#596171}
+.exam-slider-grid input{width:100%}
+.exam-fit-row{display:flex;align-items:center;gap:10px;margin-top:11px;color:#7a8190;font-size:11px}
+.exam-validation{min-height:24px;padding:10px 12px;border-radius:12px;background:#f7f8fb;color:#687082;font-size:12px;line-height:1.45}
+.exam-validation.ok{background:#eefbf3;color:#24754a}.exam-validation.warn{background:#fff8e8;color:#8a6314}.exam-validation.error{background:#fff0f0;color:#a52f2f}
+@media(max-width:600px){.exam-grid,.exam-slider-grid{grid-template-columns:1fr}.exam-adjust-head{align-items:flex-start;flex-direction:column}.exam-adjust-head span{text-align:left}.exam-preview-wrap{min-height:230px}.exam-fit-row{align-items:flex-start;flex-direction:column}}
 
-.upload-actions,.tool-upload-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px}
-.tool-upload-actions{justify-content:flex-start}
-.tool-upload-actions .hidden{display:none!important}
-@media(max-width:640px){.upload-actions,.tool-upload-actions{width:100%}.upload-actions .btn,.tool-upload-actions .btn{flex:1;min-width:145px}}
-.capture-options{display:grid;gap:14px;margin:16px 0 8px;border:1px solid #e7e9f0;border-radius:18px;padding:18px;background:#fff}
-.capture-header{display:flex;justify-content:space-between;gap:12px}
-.capture-subtitle{font-size:12px;color:#737b8b;margin-top:4px;line-height:1.45}
-.capture-camera-card{position:relative;border:1px solid #dfe3ed;border-radius:16px;background:#111827;overflow:hidden;min-height:180px}
-.capture-video{display:block;width:100%;max-height:360px;min-height:180px;object-fit:contain;background:#111827}
-.capture-video-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#cbd5e1;font-size:13px;pointer-events:none}
-.capture-camera-actions{display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:#fff;border-top:1px solid #e5e8f0}
-.capture-upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.capture-upload-row span{font-size:12px;color:#7a8190}
-.capture-editor-empty{padding:22px;text-align:center;border:1px dashed #d8ddeb;border-radius:14px;color:#7b8190;font-size:13px;background:#fafbff}
-.capture-editor{display:grid;gap:12px}
-.capture-editor-top{display:grid;gap:10px}
-.capture-mode-row{display:flex;gap:18px;flex-wrap:wrap}
-.capture-mode-row label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:650;color:#4e5666;cursor:pointer}
-.capture-mode-row input{accent-color:#5b5ff0}
-.crop-viewport{position:relative;width:100%;height:min(55vh,460px);min-height:260px;background:#111827;border-radius:14px;overflow:hidden;touch-action:none;user-select:none}
-.crop-viewport>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
-.crop-shade{position:absolute;background:rgba(15,23,42,.52);pointer-events:none}
-.crop-shade-top{left:0;right:0;top:0}
-.crop-shade-bottom{left:0;right:0;bottom:0}
-.crop-shade-left{left:0}
-.crop-shade-right{right:0}
-.crop-box{position:absolute;border:2px solid #4ade80;box-shadow:0 0 0 1px rgba(0,0,0,.18);touch-action:none;cursor:move}
-.crop-handle{position:absolute;width:18px;height:18px;border:2px solid #fff;background:#4ade80;border-radius:50%;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.35);touch-action:none}
-.crop-handle.nw{left:-10px;top:-10px;cursor:nwse-resize}.crop-handle.n{left:50%;top:-10px;transform:translateX(-50%);cursor:ns-resize}.crop-handle.ne{right:-10px;top:-10px;cursor:nesw-resize}
-.crop-handle.w{left:-10px;top:50%;transform:translateY(-50%);cursor:ew-resize}.crop-handle.e{right:-10px;top:50%;transform:translateY(-50%);cursor:ew-resize}
-.crop-handle.sw{left:-10px;bottom:-10px;cursor:nesw-resize}.crop-handle.s{left:50%;bottom:-10px;transform:translateX(-50%);cursor:ns-resize}.crop-handle.se{right:-10px;bottom:-10px;cursor:nwse-resize}
-.crop-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.crop-controls span{font-size:12px;color:#707888;margin-left:auto}
-.capture-pages{display:flex;gap:7px;overflow-x:auto;padding:3px 1px}
-.capture-page-chip{border:1px solid #dfe3ed;background:#fff;border-radius:10px;padding:7px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
-.capture-page-chip.active{border-color:#5b5ff0;background:#f5f5ff;box-shadow:0 0 0 2px rgba(91,95,240,.08)}
-.capture-pdf-options{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-@media(max-width:640px){.capture-pdf-options{grid-template-columns:1fr}.crop-viewport{height:58vh;min-height:280px}.crop-controls span{margin-left:0;width:100%}}
-
-
-/* PDF -> Images tool + homepage preview */
-.pdf-image-options{display:grid;gap:14px;margin:16px 0 8px;border:1px solid #e7e9f0;border-radius:18px;padding:18px;background:#fff}
-.pdf-image-options-title{font-size:18px;font-weight:850;color:#263247;border-bottom:1px solid #eceef3;padding-bottom:12px}
-.pdf-image-option-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.pdf-image-preview-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:3px;font-size:13px;color:#263247}
-.pdf-image-preview-head span{font-size:11px;color:#7a8190;font-weight:600;text-align:right}
-.pdf-image-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding-top:4px}
-.pdf-image-preview-empty{grid-column:1/-1;border:1px dashed #d8ddeb;border-radius:14px;padding:22px;text-align:center;color:#7b8190;background:#fafbff;font-size:12px}
-.pdf-page-thumb{border:1px solid #dfe3ed;border-radius:12px;background:#f7f8fb;padding:7px;display:grid;gap:6px;min-width:0}
-.pdf-page-thumb canvas{display:block;width:100%;height:125px;object-fit:contain;background:#fff;border-radius:7px;box-shadow:0 2px 8px rgba(20,30,60,.07)}
-.pdf-page-thumb span{font-size:10px;font-weight:800;color:#68738a;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pdf-page-thumb.selected{border-color:#5b5cf0;box-shadow:0 0 0 2px rgba(91,92,240,.10)}
-.pdf-page-thumb.loading{opacity:.55}
-
-
-/* PDF → Images polished controls */
-.pdf-image-options{box-shadow:0 8px 28px rgba(20,28,60,.05)}
-.pdf-image-option-grid{align-items:start}
-.pdf-image-options .tool-option select{appearance:auto;background:#fff;font-weight:700;color:#20283a;min-height:46px;cursor:pointer}
-.pdf-image-options .tool-option input{min-height:46px;box-sizing:border-box}
-.pdf-image-options .option-hint{font-weight:500}
-.pdf-image-preview{min-height:112px;align-items:start}
-.pdf-page-thumb{position:relative;display:grid;justify-items:center;gap:6px;padding:8px;border:1px solid #e3e6ef;border-radius:14px;background:#fbfcff;box-shadow:0 3px 12px rgba(20,28,60,.05);overflow:hidden}
-.pdf-page-thumb canvas{display:block;max-width:100%;height:auto;border-radius:7px;background:#fff;box-shadow:0 2px 8px rgba(20,28,60,.08)}
-.pdf-page-thumb span{font-size:11px;font-weight:800;color:#60697a;text-align:center;line-height:1.25}
-.pdf-page-thumb.loading{opacity:.65}
-.pdf-image-preview-empty{min-height:90px;display:grid;place-items:center}
-@media(max-width:600px){.pdf-image-option-grid{grid-template-columns:1fr}.pdf-image-preview{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pdf-image-options{padding:16px}.pdf-image-options-title{font-size:17px}}
-
-.pdf-image-download-options{margin-top:8px;}
-.pdf-image-download-options .split-output-card{min-height:64px;}
-
-/* Mobile-safe file picker: keep the input programmatically/label accessible without affecting layout. */
-#imageInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-#chooseBtn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-
-
-/* Mobile: thumbnails are draggable cards, not browser image controls. */
-.thumb, .thumb img {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-.thumb img {
-  pointer-events: none !important;
-  -webkit-user-drag: none !important;
-}
-
-/* Mobile reorder handle */
-@media (pointer: coarse){
-  .drag-hint{
-    touch-action:none !important;
-    pointer-events:auto !important;
-    cursor:grab;
-  }
-}
+/* Competitive exam image resizer */
+.exam-resizer-options{display:grid;gap:14px;margin:14px 0 8px}
+.exam-tool-head{display:grid;gap:5px}
+.exam-note{margin:0;color:#707889;font-size:12px;line-height:1.45}
+.exam-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.exam-requirement-card{border:1px solid #dfe3ed;border-radius:14px;background:#f8f9ff;padding:13px 14px;color:#394154;font-size:12px;line-height:1.5}
+.exam-requirement-card strong{color:#20283a}
+.exam-adjust-card{border:1px solid #e5e8f0;border-radius:16px;padding:14px;background:#fff}
+.exam-adjust-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;font-size:13px}
+.exam-adjust-head span{color:#7a8190;font-size:11px;text-align:right}
+.exam-preview-wrap{position:relative;display:grid;place-items:center;min-height:260px;border-radius:13px;background:#f3f5f9;overflow:hidden;border:1px solid #e2e5ed}
+#examPreviewCanvas{display:block;max-width:100%;width:100%;height:auto;max-height:360px;object-fit:contain}
+#examPreviewEmpty{position:absolute;color:#858c9c;font-size:12px;pointer-events:none}
+.exam-slider-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px}
+.exam-slider-grid label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#596171}
+.exam-slider-grid input{width:100%}
+.exam-fit-row{display:flex;align-items:center;gap:10px;margin-top:11px;color:#7a8190;font-size:11px}
+.exam-validation{min-height:24px;padding:10px 12px;border-radius:12px;background:#f7f8fb;color:#687082;font-size:12px;line-height:1.45}
+.exam-validation.ok{background:#eefbf3;color:#24754a}.exam-validation.warn{background:#fff8e8;color:#8a6314}.exam-validation.error{background:#fff0f0;color:#a52f2f}
+@media(max-width:600px){.exam-grid,.exam-slider-grid{grid-template-columns:1fr}.exam-adjust-head{align-items:flex-start;flex-direction:column}.exam-adjust-head span{text-align:left}.exam-preview-wrap{min-height:230px}.exam-fit-row{align-items:flex-start;flex-direction:column}}
