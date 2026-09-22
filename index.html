@@ -7,6 +7,7 @@
 <title>PDFMines — Fast PDF Tools</title>
 <link rel="stylesheet" href="style.css">
 <style>
+.exam-filter-toggle-row{display:flex;align-items:center;gap:10px;margin-top:10px}.exam-filter-status{font-size:.78rem;font-weight:700;opacity:.68}.exam-filter-panel{margin-top:10px;padding:12px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}.exam-filter-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;flex-wrap:wrap}.exam-filter-panel.hidden{display:none}.exam-filter-panel .exam-enhance-note{margin-top:9px}
 .exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}.exam-live-crop-dimensions{margin:8px 0 2px;padding:9px 12px;border-radius:10px;background:#f5f7fb;color:#1e293b;font-weight:800;font-size:.82rem;text-align:center;font-variant-numeric:tabular-nums}.exam-live-crop-dimensions small{font-weight:600;opacity:.65}
 </style>
 </head>
@@ -169,18 +170,28 @@
           <label>Horizontal <input id="examOffsetX" type="range" min="-1" max="1" step="0.005" value="0"></label>
           <label>Vertical <input id="examOffsetY" type="range" min="-1" max="1" step="0.005" value="0"></label>
         </div>
-        <div class="exam-enhance-grid">
-          <label class="tool-option">Background
-            <select id="examBackground"><option value="original">Original</option><option value="white">White</option></select>
-          </label>
-          <label class="tool-option">Filter
-            <select id="examFilter"><option value="original">Original</option><option value="clean">Clean paper</option><option value="grayscale">Grayscale</option></select>
-          </label>
-          <label class="tool-option">Sharpness
-            <select id="examSharpness"><option value="off">Off</option><option value="medium" selected>Medium</option><option value="strong">Strong</option></select>
-          </label>
+        <div class="exam-filter-toggle-row">
+          <button id="examFilterToggle" class="btn secondary small" type="button" aria-expanded="false">🎨 Use Filters</button>
+          <span id="examFilterStatus" class="exam-filter-status">No filters applied</span>
         </div>
-        <div class="exam-enhance-note">White background works best when the original background is already light. Clean paper is tuned for signatures, declarations and thumb impressions photographed on paper.</div>
+        <div id="examFilterPanel" class="exam-filter-panel hidden" aria-hidden="true">
+          <div class="exam-enhance-grid">
+            <label class="tool-option">Background
+              <select id="examBackground"><option value="original">Original</option><option value="white">White</option></select>
+            </label>
+            <label class="tool-option">Quick Filter
+              <select id="examFilter"><option value="original">Original</option><option value="clean">Clean paper</option><option value="grayscale">Grayscale</option></select>
+            </label>
+            <label class="tool-option">Sharpness
+              <select id="examSharpness"><option value="off">Off</option><option value="medium" selected>Medium</option><option value="strong">Strong</option></select>
+            </label>
+          </div>
+          <div class="exam-filter-actions">
+            <button id="examResetFilters" class="btn secondary small" type="button">↩ Reset Filters</button>
+            <button id="examApplyFilters" class="btn primary small" type="button">✓ Apply Filters</button>
+          </div>
+          <div class="exam-enhance-note">Preview changes are temporary until you apply them. Reset restores the original filter state. White background works best when the original background is already light. Clean paper is tuned for signatures, declarations and thumb impressions photographed on paper.</div>
+        </div>
         <div class="exam-fit-row"><button id="examAutoFit" class="btn secondary small" type="button">Auto fit</button><span id="examCropDimensions">Crop: —</span><span>Preview uses the exact output aspect ratio.</span></div>
       </div>
       <div class="exam-final-card">
@@ -337,6 +348,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=75"></script>
+<script src="script.js?v=76"></script>
 </body>
 </html>

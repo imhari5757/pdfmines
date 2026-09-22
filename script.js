@@ -1052,6 +1052,11 @@ const examOffsetY = $("examOffsetY");
 const examBackground = $("examBackground");
 const examFilter = $("examFilter");
 const examSharpness = $("examSharpness");
+const examFilterToggle = $("examFilterToggle");
+const examFilterPanel = $("examFilterPanel");
+const examFilterStatus = $("examFilterStatus");
+const examApplyFilters = $("examApplyFilters");
+const examResetFilters = $("examResetFilters");
 const examAutoFit = $("examAutoFit");
 const examAutoCropMode = $("examAutoCropMode");
 const examManualCropMode = $("examManualCropMode");
@@ -1696,6 +1701,7 @@ let examManualZoomBaseCrop = null;
 let examAppliedCrop = null;
 let examDraftAutoCrop = null;
 let examCropPointer = {active:false,mode:"draw",edge:null,startX:0,startY:0,currentX:0,currentY:0,offsetX:0,offsetY:0,baseCrop:null};
+let examAppliedEnhancements = {background:"original",filter:"original",sharpness:"off"};
 
 function examDefaultConfig(){
   return {w:140,h:180,maxKB:40,format:"jpeg",note:"Enter the dimensions and size limit from the latest notification for this application."};
@@ -1760,6 +1766,35 @@ function updateExamRequirement(){
   updateExamPreview();
 }
 
+function setExamFilterPanel(open){
+  if(!examFilterPanel||!examFilterToggle) return;
+  examFilterPanel.classList.toggle("hidden",!open);
+  examFilterPanel.setAttribute("aria-hidden",String(!open));
+  examFilterToggle.setAttribute("aria-expanded",String(open));
+  examFilterToggle.textContent=open?"🎨 Hide Filters":"🎨 Use Filters";
+}
+
+function updateExamFilterStatus(){
+  if(!examFilterStatus) return;
+  const a=examAppliedEnhancements||{};
+  const active=[];
+  if(a.background&&a.background!=="original") active.push("Background");
+  if(a.filter&&a.filter!=="original") active.push(a.filter==="clean"?"Clean paper":a.filter==="grayscale"?"Grayscale":"Filter");
+  if(a.sharpness&&a.sharpness!=="off") active.push("Sharpness");
+  examFilterStatus.textContent=active.length?`✓ Applied: ${active.join(" · ")}`:"No filters applied";
+}
+
+function getDraftExamEnhancements(){
+  return {background:examBackground?.value||"original",filter:examFilter?.value||"original",sharpness:examSharpness?.value||"off"};
+}
+
+function resetDraftExamEnhancements(){
+  const photo=examDocType?.value==="photo";
+  examBackground.value=photo?"original":"white";
+  examFilter.value=photo?"original":"clean";
+  examSharpness.value="medium";
+}
+
 function resetExamResizer(){
   examImage=null;
   if(examObjectUrl){URL.revokeObjectURL(examObjectUrl);examObjectUrl=null;}
@@ -1777,6 +1812,9 @@ function resetExamResizer(){
   examBackground.value=examDocType.value==="photo" ? "original" : "white";
   examFilter.value=examDocType.value==="photo" ? "original" : "clean";
   examSharpness.value="medium";
+  examAppliedEnhancements={background:examBackground.value,filter:examFilter.value,sharpness:examSharpness.value};
+  updateExamFilterStatus();
+  setExamFilterPanel(false);
   const cfg=getExamConfig();
   if(cfg.w) examWidth.value=cfg.w;
   if(cfg.h) examHeight.value=cfg.h;
@@ -2280,9 +2318,10 @@ function applyExamImageAdjustments(canvas){
   const ctx=canvas.getContext("2d",{alpha:false,willReadFrequently:true});
   const image=ctx.getImageData(0,0,canvas.width,canvas.height);
   const data=image.data;
-  const background=examBackground.value;
-  const filter=examFilter.value;
-  const sharpness=examSharpness.value;
+  const enhancementState = arguments.length>1 && arguments[1] ? arguments[1] : examAppliedEnhancements;
+  const background=enhancementState.background;
+  const filter=enhancementState.filter;
+  const sharpness=enhancementState.sharpness;
 
   if(background==="white"){
     const samplePoints=[
@@ -2337,14 +2376,14 @@ function applyExamImageAdjustments(canvas){
   ctx.putImageData(image,0,0);
 }
 
-function renderExamCanvas(canvas, crop, maxW=420, maxH=360){
+function renderExamCanvas(canvas, crop, maxW=420, maxH=360, enhancementState=examAppliedEnhancements){
   const scale=Math.min(maxW/crop.tw,maxH/crop.th,1);
   canvas.width=Math.max(1,Math.round(crop.tw*scale));
   canvas.height=Math.max(1,Math.round(crop.th*scale));
   const temp=document.createElement("canvas");
   temp.width=crop.tw; temp.height=crop.th;
   drawExamBase(temp,crop);
-  applyExamImageAdjustments.call(null,temp);
+  applyExamImageAdjustments.call(null,temp,enhancementState);
   const ctx=canvas.getContext("2d",{alpha:false});
   ctx.imageSmoothingEnabled=true;
   ctx.imageSmoothingQuality="high";
@@ -2367,7 +2406,7 @@ function updateExamComparison(){
   const crop=getExamCommittedCrop();
   if(!crop||!examImage) return;
   drawOriginalExamCanvas(examBeforeCanvas,crop);
-  renderExamCanvas(examAfterCanvas,crop,220,180);
+  renderExamCanvas(examAfterCanvas,crop,220,180,getDraftExamEnhancements());
   const enhanced=Number(examCompareRange?.value||100)>=50;
   if(examAfterCanvas) examAfterCanvas.style.opacity=enhanced?"1":"0.35";
   if(examBeforeCanvas) examBeforeCanvas.style.opacity=enhanced?"0.35":"1";
@@ -2416,6 +2455,8 @@ function makeExamReady(){
   examBackground.value="white";
   examFilter.value=examDocType.value==="photo"?"original":"clean";
   examSharpness.value="medium";
+  examAppliedEnhancements=getDraftExamEnhancements();
+  updateExamFilterStatus();
   updateExamPreview();
   setExamValidation("Exam-ready adjustments applied. Review the crop before downloading.","ok");
 }
@@ -2427,15 +2468,15 @@ async function createBatchExamZip(){
   const zip=new JSZip();
   for(const [input,type] of jobs){
     const file=input.files[0],cfg=EXAM_PROFILES.ibps.docs[type];
-    const old={image:examImage,w:examWidth.value,h:examHeight.value,max:examMaxKB.value,format:examFormat.value,bg:examBackground.value,filter:examFilter.value,sharp:examSharpness.value,zoom:examZoom.value,pzoom:examPreviewZoom.value,ox:examOffsetX.value,oy:examOffsetY.value};
+    const old={image:examImage,w:examWidth.value,h:examHeight.value,max:examMaxKB.value,format:examFormat.value,bg:examBackground.value,filter:examFilter.value,sharp:examSharpness.value,applied:{...examAppliedEnhancements},zoom:examZoom.value,pzoom:examPreviewZoom.value,ox:examOffsetX.value,oy:examOffsetY.value};
     try{
       examImage=await loadExamImage(file);
       examWidth.value=cfg.w;examHeight.value=cfg.h;examMaxKB.value=cfg.maxKB;examFormat.value=cfg.format;
-      examBackground.value="white";examFilter.value=type==="photo"?"original":"clean";examSharpness.value="medium";examZoom.value="0";examPreviewZoom.value="0";examOffsetX.value="0";examOffsetY.value="0"; updateExamZoomLabel();
+      examBackground.value="white";examFilter.value=type==="photo"?"original":"clean";examSharpness.value="medium";examAppliedEnhancements=getDraftExamEnhancements();examZoom.value="0";examPreviewZoom.value="0";examOffsetX.value="0";examOffsetY.value="0"; updateExamZoomLabel();
       const blob=await createExamBlob();
       zip.file(`IBPS_${EXAM_DOC_LABELS[type].replace(/[^a-z0-9]+/gi,"_")}.${cfg.format==="png"?"png":"jpg"}`,blob);
     }finally{
-      examImage=old.image;examWidth.value=old.w;examHeight.value=old.h;examMaxKB.value=old.max;examFormat.value=old.format;examBackground.value=old.bg;examFilter.value=old.filter;examSharpness.value=old.sharp;examZoom.value=old.zoom;examPreviewZoom.value=old.pzoom;examOffsetX.value=old.ox;examOffsetY.value=old.oy;
+      examImage=old.image;examWidth.value=old.w;examHeight.value=old.h;examMaxKB.value=old.max;examFormat.value=old.format;examBackground.value=old.bg;examFilter.value=old.filter;examSharpness.value=old.sharp;examAppliedEnhancements=old.applied;examZoom.value=old.zoom;examPreviewZoom.value=old.pzoom;examOffsetX.value=old.ox;examOffsetY.value=old.oy;
     }
   }
   return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
@@ -2548,6 +2589,21 @@ function downloadExamBlob(blob){
   setTimeout(()=>URL.revokeObjectURL(url),1800);
 }
 
+examFilterToggle?.addEventListener("click",()=>setExamFilterPanel(examFilterPanel?.classList.contains("hidden")));
+examApplyFilters?.addEventListener("click",()=>{
+  examAppliedEnhancements=getDraftExamEnhancements();
+  updateExamFilterStatus();
+  setExamFilterPanel(false);
+  updateExamPreview();
+  setExamValidation("Filters applied ✓. Review the final preview before downloading.","ok");
+});
+examResetFilters?.addEventListener("click",()=>{
+  resetDraftExamEnhancements();
+  examAppliedEnhancements={background:"original",filter:"original",sharpness:"off"};
+  updateExamFilterStatus();
+  updateExamPreview();
+  setExamValidation("Filters reset. Original image restored.","ok");
+});
 [examProfile,examDocType].forEach(el=>el?.addEventListener("change",updateExamRequirement));
 [examWidth,examHeight].forEach(el=>el?.addEventListener("input",()=>{examAppliedCrop=null;examDraftAutoCrop=null;updateExamPreview();}));
 [examMaxKB,examFormat,examOffsetX,examOffsetY,examBackground,examFilter,examSharpness].forEach(el=>el?.addEventListener("input",updateExamPreview));
