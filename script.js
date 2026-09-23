@@ -2527,7 +2527,7 @@ function updateExamFinalPreview(crop){
   }
   if(examReadyText){
     examReadyText.textContent=examAppliedCrop
-      ? `Saved crop • final output ${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${limit?` • max ${limit} KB`:""}`
+      ? `Saved crop • final output ${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${limit && examFormat.value!=="pdf"?` • max ${limit} KB`:""}`
       : `Preview only • save the crop when ready • ${crop.tw} × ${crop.th} px`;
   }
 }
@@ -2545,7 +2545,7 @@ function updateExamPreview(){
   updateExamComparison();
   updateExamFinalPreview(getExamCommittedCrop());
   const kb=Number(examMaxKB.value)||0;
-  setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb?` • max ${kb} KB`:""}`);
+  setExamValidation(`${crop.tw} × ${crop.th} px • ${examFormat.value.toUpperCase()}${kb && examFormat.value!=="pdf"?` • max ${kb} KB`:""}`);
 }
 
 async function createExamBlob(){
@@ -2556,20 +2556,38 @@ async function createExamBlob(){
   applyExamImageAdjustments(canvas);
   const format=examFormat.value;
   const maxBytes=Math.max(0,(Number(examMaxKB.value)||0)*1024);
-  if(format==="png"){
-    const blob=await new Promise(r=>canvas.toBlob(r,"image/png"));
-    if(!blob) throw new Error("Could not create the PNG image.");
-    if(maxBytes && blob.size>maxBytes) throw new Error(`PNG is ${Math.ceil(blob.size/1024)} KB, above the ${Number(examMaxKB.value)} KB limit. Use JPG/JPEG or change the target size only if the notification permits it.`);
+
+  // PDF export uses a JPEG snapshot of the final canvas, then places it on a
+  // single PDF page with the exact output aspect ratio. The PDF itself is not
+  // forced under the image KB limit because PDF container overhead is separate.
+  if(format==="pdf"){
+    if(typeof PDFLib==="undefined" || !PDFLib.PDFDocument) throw new Error("PDF export is unavailable right now. Please reload the page and try again.");
+    const jpgBlob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not create the image for PDF export.")),"image/jpeg",0.92));
+    const bytes=new Uint8Array(await jpgBlob.arrayBuffer());
+    const pdfDoc=await PDFLib.PDFDocument.create();
+    const jpg=await pdfDoc.embedJpg(bytes);
+    const page=pdfDoc.addPage([crop.tw,crop.th]);
+    page.drawImage(jpg,{x:0,y:0,width:crop.tw,height:crop.th});
+    const pdfBytes=await pdfDoc.save();
+    return new Blob([pdfBytes],{type:"application/pdf"});
+  }
+
+  const mime=format==="jpg"||format==="jpeg"?"image/jpeg":"image/png";
+  if(format!=="jpg"&&format!=="jpeg"){
+    const blob=await new Promise(r=>canvas.toBlob(r,mime));
+    if(!blob) throw new Error("Could not create the image.");
+    if(maxBytes && blob.size>maxBytes) throw new Error(`${Math.ceil(blob.size/1024)} KB is above the ${Number(examMaxKB.value)} KB limit. Use JPG/JPEG or change the target size only if the notification permits it.`);
     return blob;
   }
+
   if(!maxBytes){
-    return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not create the JPG image.")),"image/jpeg",0.92));
+    return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not create the JPG/JPEG image.")),"image/jpeg",0.92));
   }
   let low=0.1,high=0.98,best=null;
-  for(let i=0;i<8;i++){
+  for(let i=0;i<10;i++){
     const q=(low+high)/2;
     const blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",q));
-    if(!blob) throw new Error("Could not create the JPG image.");
+    if(!blob) throw new Error("Could not create the JPG/JPEG image.");
     if(blob.size<=maxBytes){best=blob;low=q;}else high=q;
   }
   if(!best){
@@ -2582,7 +2600,7 @@ async function createExamBlob(){
 function downloadExamBlob(blob){
   const doc=EXAM_DOC_LABELS[examDocType.value]||"Image";
   const safe=doc.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
-  const ext=examFormat.value==="png"?"png":"jpg";
+  const ext=examFormat.value==="pdf"?"pdf":(examFormat.value==="jpeg"?"jpeg":"jpg");
   const a=document.createElement("a");
   const url=URL.createObjectURL(blob);
   a.href=url;a.download=`PDFMines_${safe}.${ext}`;document.body.appendChild(a);a.click();a.remove();

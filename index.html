@@ -9,6 +9,13 @@
 <style>
 .exam-filter-toggle-row{display:flex;align-items:center;gap:10px;margin-top:10px}.exam-filter-status{font-size:.78rem;font-weight:700;opacity:.68}.exam-filter-panel{margin-top:10px;padding:12px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}.exam-filter-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;flex-wrap:wrap}.exam-filter-panel.hidden{display:none}.exam-filter-panel .exam-enhance-note{margin-top:9px}
 .exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}.exam-live-crop-dimensions{margin:8px 0 2px;padding:9px 12px;border-radius:10px;background:#f5f7fb;color:#1e293b;font-weight:800;font-size:.82rem;text-align:center;font-variant-numeric:tabular-nums}.exam-live-crop-dimensions small{font-weight:600;opacity:.65}
+/* v77: keep the editing preview visible while the controls below it are adjusted. */
+.exam-adjust-card{position:relative;overflow:visible}
+.exam-preview-wrap.exam-crop-editor{position:sticky;top:0;z-index:30;isolation:isolate;background:#fff;border-radius:14px;padding:8px;box-shadow:0 5px 18px rgba(15,23,42,.10);border:1px solid #e2e8f0}
+.exam-preview-wrap.exam-crop-editor::before{content:"Editing preview";display:block;font-size:.72rem;font-weight:800;letter-spacing:.02em;opacity:.65;padding:1px 4px 6px}
+.exam-preview-wrap.exam-crop-editor canvas{max-height:42vh;object-fit:contain;margin:0 auto}
+@media (max-width:640px){.exam-preview-wrap.exam-crop-editor{top:0;padding:6px;border-radius:12px}.exam-preview-wrap.exam-crop-editor::before{font-size:.68rem;padding-bottom:4px}.exam-preview-wrap.exam-crop-editor canvas{max-height:36vh}}
+
 </style>
 </head>
 <body>
@@ -140,7 +147,7 @@
         <label class="tool-option">Width (px)<input id="examWidth" type="number" min="1" max="6000" value="140"></label>
         <label class="tool-option">Height (px)<input id="examHeight" type="number" min="1" max="6000" value="180"></label>
         <label class="tool-option">Max file size (KB)<input id="examMaxKB" type="number" min="1" max="10000" value="40"></label>
-        <label class="tool-option">Output format<select id="examFormat"><option value="jpeg">JPG / JPEG</option><option value="png">PNG</option></select></label>
+        <label class="tool-option">Output format<select id="examFormat"><option value="jpg">JPG</option><option value="jpeg">JPEG</option><option value="pdf">PDF</option></select></label>
       </div>
       <div class="exam-adjust-card">
         <div class="exam-adjust-head"><b>Crop &amp; adjust</b><span id="examSourceInfo">Choose an image to begin.</span></div>
@@ -333,7 +340,7 @@
       <div id="pdfImagePreview" class="pdf-image-preview"></div>
     </div>
 
-    <button id="toolRun" class="btn primary create">Run tool <span>→</span></button>
+    <button id="toolRun" class="btn primary create">Download <span>↓</span></button>
     <div id="toolStatus" class="tool-status"></div>
   </div>
 </div>
@@ -348,6 +355,6 @@
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="script.js?v=76"></script>
+<script src="script.js?v=77"></script>
 </body>
 </html>
