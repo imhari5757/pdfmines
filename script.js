@@ -1015,6 +1015,7 @@ const toolInput = $("toolInput");
 const toolDrop = $("toolDrop");
 const toolChoose = $("toolChoose");
 const toolFilesEl = $("toolFiles");
+const mergeFileListHint = $("mergeFileListHint");
 const toolRun = $("toolRun");
 const toolStatus = $("toolStatus");
 const toolTitle = $("toolModalTitle");
@@ -1307,18 +1308,153 @@ toolInput.addEventListener("change",async()=>{
 
 function renderToolFiles(){
   toolFilesEl.innerHTML="";
+  if(mergeFileListHint){
+    mergeFileListHint.classList.toggle("hidden",activeTool!=="merge" || toolFiles.length<2);
+  }
   toolFiles.forEach((f,i)=>{
     const row=document.createElement("div");
-    row.className="tool-file";
-    row.innerHTML=`<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
+    row.className=`tool-file${activeTool==="merge" ? " merge-sortable" : ""}`;
+    row.__toolFile=f;
+    row.innerHTML=`${activeTool==="merge" ? '<span class="merge-drag-handle" role="button" tabindex="0" aria-label="Drag to reorder">⋮⋮</span>' : ""}<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
     row.querySelector(".tool-file-name").textContent=f.name;
     row.querySelector("button").onclick=()=>{
-      toolFiles.splice(i,1); renderToolFiles();
+      const idx=toolFiles.indexOf(f);
+      if(idx>=0) toolFiles.splice(idx,1);
+      renderToolFiles();
     };
+    if(activeTool==="merge") setupMergeRowDrag(row,row.querySelector(".merge-drag-handle"));
     toolFilesEl.append(row);
   });
 }
 
+let mergeDragRow=null;
+let mergeDragPointerId=null;
+
+function syncMergeFilesFromDom(){
+  if(activeTool!=="merge") return;
+  toolFiles=[...toolFilesEl.querySelectorAll(".merge-sortable")]
+    .map(row=>row.__toolFile)
+    .filter(Boolean);
+  [...toolFilesEl.querySelectorAll(".merge-sortable")].forEach((row,i)=>{
+    const num=row.querySelector(".tool-file-num");
+    if(num) num.textContent=String(i+1).padStart(2,"0");
+  });
+}
+
+function setupMergeRowDrag(row,handle){
+  if(!handle) return;
+
+  let ghost=null;
+  let dropLine=null;
+  let targetRow=null;
+
+  const clearVisuals=()=>{
+    toolFilesEl.querySelectorAll('.merge-drag-target').forEach(el=>el.classList.remove('merge-drag-target'));
+    if(dropLine){ dropLine.remove(); dropLine=null; }
+    targetRow=null;
+  };
+
+  const makeGhost=()=>{
+    ghost=document.createElement('div');
+    ghost.className='merge-drag-ghost';
+    ghost.innerHTML=`<span class="ghost-hand">✋</span><span class="ghost-name"></span>`;
+    ghost.querySelector('.ghost-name').textContent=row.querySelector('.tool-file-name')?.textContent||'PDF';
+    document.body.appendChild(ghost);
+  };
+
+  const moveGhost=(x,y)=>{
+    if(!ghost) return;
+    const offsetX=18, offsetY=18;
+    const w=ghost.offsetWidth||220, h=ghost.offsetHeight||48;
+    const left=Math.min(Math.max(8,x+offsetX),Math.max(8,window.innerWidth-w-8));
+    const top=Math.min(Math.max(8,y+offsetY),Math.max(8,window.innerHeight-h-8));
+    ghost.style.left=`${left}px`;
+    ghost.style.top=`${top}px`;
+  };
+
+  const showDropTarget=(clientY)=>{
+    clearVisuals();
+    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')].filter(r=>r!==mergeDragRow);
+    if(!rows.length) return;
+    let nearest=null;
+    for(const candidate of rows){
+      const rect=candidate.getBoundingClientRect();
+      if(clientY < rect.top + rect.height/2){ nearest=candidate; break; }
+    }
+    targetRow=nearest;
+    dropLine=document.createElement('div');
+    dropLine.className='merge-drop-line';
+    if(nearest){
+      nearest.classList.add('merge-drag-target');
+      toolFilesEl.insertBefore(dropLine,nearest);
+    }else{
+      const last=rows[rows.length-1];
+      last.classList.add('merge-drag-target');
+      toolFilesEl.appendChild(dropLine);
+    }
+  };
+
+  const commitMove=()=>{
+    if(!mergeDragRow) return;
+    const dragged=mergeDragRow;
+    clearVisuals();
+    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')].filter(r=>r!==dragged);
+    if(targetRow && rows.includes(targetRow)) toolFilesEl.insertBefore(dragged,targetRow);
+    else toolFilesEl.appendChild(dragged);
+    syncMergeFilesFromDom();
+  };
+
+  const cleanup=()=>{
+    if(ghost){ ghost.remove(); ghost=null; }
+    clearVisuals();
+    if(mergeDragRow) mergeDragRow.classList.remove('merge-dragging');
+    mergeDragRow=null;
+    mergeDragPointerId=null;
+  };
+
+  handle.addEventListener('pointerdown',e=>{
+    if(e.button!==undefined && e.button!==0) return;
+    e.preventDefault();
+    mergeDragRow=row;
+    mergeDragPointerId=e.pointerId;
+    row.classList.add('merge-dragging');
+    makeGhost();
+    moveGhost(e.clientX,e.clientY);
+    handle.setPointerCapture?.(e.pointerId);
+  });
+
+  handle.addEventListener('pointermove',e=>{
+    if(!mergeDragRow || e.pointerId!==mergeDragPointerId) return;
+    e.preventDefault();
+    moveGhost(e.clientX,e.clientY);
+    showDropTarget(e.clientY);
+  });
+
+  const finish=()=>{
+    if(!mergeDragRow) return;
+    commitMove();
+    cleanup();
+  };
+  handle.addEventListener('pointerup',finish);
+  handle.addEventListener('pointercancel',cleanup);
+  handle.addEventListener('lostpointercapture',()=>{
+    if(mergeDragRow) finish();
+  });
+
+  handle.addEventListener('keydown',e=>{
+    if(e.key!=='ArrowUp' && e.key!=='ArrowDown') return;
+    e.preventDefault();
+    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')];
+    const idx=rows.indexOf(row);
+    if(idx<0) return;
+    const next=e.key==='ArrowUp' ? idx-1 : idx+1;
+    if(next<0 || next>=rows.length) return;
+    if(e.key==='ArrowUp') toolFilesEl.insertBefore(row,rows[next]);
+    else toolFilesEl.insertBefore(row,rows[next].nextSibling);
+    syncMergeFilesFromDom();
+    handle.focus();
+  });
+}
 function ensurePDFLib(){
   if(!window.PDFLib) throw new Error("PDF engine could not load. Please reload the page.");
   return window.PDFLib;
