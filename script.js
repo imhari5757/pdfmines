@@ -1015,7 +1015,6 @@ const toolInput = $("toolInput");
 const toolDrop = $("toolDrop");
 const toolChoose = $("toolChoose");
 const toolFilesEl = $("toolFiles");
-const mergeFileListHint = $("mergeFileListHint");
 const toolRun = $("toolRun");
 const toolStatus = $("toolStatus");
 const toolTitle = $("toolModalTitle");
@@ -1308,93 +1307,15 @@ toolInput.addEventListener("change",async()=>{
 
 function renderToolFiles(){
   toolFilesEl.innerHTML="";
-  if(mergeFileListHint){
-    mergeFileListHint.classList.toggle("hidden",activeTool!=="merge" || toolFiles.length<2);
-  }
   toolFiles.forEach((f,i)=>{
     const row=document.createElement("div");
-    row.className=`tool-file${activeTool==="merge" ? " merge-sortable" : ""}`;
-    row.__toolFile=f;
-    row.innerHTML=`${activeTool==="merge" ? '<span class="merge-drag-handle" role="button" tabindex="0" aria-label="Drag to reorder">⋮⋮</span>' : ""}<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
+    row.className="tool-file";
+    row.innerHTML=`<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
     row.querySelector(".tool-file-name").textContent=f.name;
     row.querySelector("button").onclick=()=>{
-      const idx=toolFiles.indexOf(f);
-      if(idx>=0) toolFiles.splice(idx,1);
-      renderToolFiles();
+      toolFiles.splice(i,1); renderToolFiles();
     };
-    if(activeTool==="merge") setupMergeRowDrag(row,row.querySelector(".merge-drag-handle"));
     toolFilesEl.append(row);
-  });
-}
-
-let mergeDragRow=null;
-let mergeDragPointerId=null;
-
-function syncMergeFilesFromDom(){
-  if(activeTool!=="merge") return;
-  toolFiles=[...toolFilesEl.querySelectorAll(".merge-sortable")]
-    .map(row=>row.__toolFile)
-    .filter(Boolean);
-  [...toolFilesEl.querySelectorAll(".merge-sortable")].forEach((row,i)=>{
-    const num=row.querySelector(".tool-file-num");
-    if(num) num.textContent=String(i+1).padStart(2,"0");
-  });
-}
-
-function setupMergeRowDrag(row,handle){
-  if(!handle) return;
-  const moveRow=(clientY)=>{
-    if(!mergeDragRow) return;
-    const rows=[...toolFilesEl.querySelectorAll(".merge-sortable")].filter(r=>r!==mergeDragRow);
-    let target=null;
-    for(const candidate of rows){
-      const rect=candidate.getBoundingClientRect();
-      if(clientY < rect.top + rect.height/2){ target=candidate; break; }
-    }
-    if(target) toolFilesEl.insertBefore(mergeDragRow,target);
-    else toolFilesEl.appendChild(mergeDragRow);
-    [...toolFilesEl.querySelectorAll(".merge-sortable")].forEach((r,i)=>{
-      const num=r.querySelector(".tool-file-num");
-      if(num) num.textContent=String(i+1).padStart(2,"0");
-    });
-  };
-
-  handle.addEventListener("pointerdown",e=>{
-    if(e.button!==undefined && e.button!==0) return;
-    e.preventDefault();
-    mergeDragRow=row;
-    mergeDragPointerId=e.pointerId;
-    row.classList.add("merge-dragging");
-    handle.setPointerCapture?.(e.pointerId);
-  });
-  handle.addEventListener("pointermove",e=>{
-    if(!mergeDragRow || e.pointerId!==mergeDragPointerId) return;
-    e.preventDefault();
-    moveRow(e.clientY);
-  });
-  const finish=()=>{
-    if(!mergeDragRow) return;
-    mergeDragRow.classList.remove("merge-dragging");
-    syncMergeFilesFromDom();
-    mergeDragRow=null;
-    mergeDragPointerId=null;
-  };
-  handle.addEventListener("pointerup",finish);
-  handle.addEventListener("pointercancel",finish);
-  handle.addEventListener("lostpointercapture",finish);
-
-  handle.addEventListener("keydown",e=>{
-    if(e.key!=="ArrowUp" && e.key!=="ArrowDown") return;
-    e.preventDefault();
-    const rows=[...toolFilesEl.querySelectorAll(".merge-sortable")];
-    const idx=rows.indexOf(row);
-    if(idx<0) return;
-    const next=e.key==="ArrowUp" ? idx-1 : idx+1;
-    if(next<0 || next>=rows.length) return;
-    if(e.key==="ArrowUp") toolFilesEl.insertBefore(row,rows[next]);
-    else toolFilesEl.insertBefore(row,rows[next].nextSibling);
-    syncMergeFilesFromDom();
-    handle.focus();
   });
 }
 

@@ -16,15 +16,6 @@
 .exam-preview-wrap.exam-crop-editor canvas{max-height:42vh;object-fit:contain;margin:0 auto}
 @media (max-width:640px){.exam-preview-wrap.exam-crop-editor{top:0;padding:6px;border-radius:12px}.exam-preview-wrap.exam-crop-editor::before{font-size:.68rem;padding-bottom:4px}.exam-preview-wrap.exam-crop-editor canvas{max-height:36vh}}
 
-
-/* Merge PDF: touch-friendly drag reorder */
-.merge-file-list-hint{margin:8px 0 0;font-size:.78rem;opacity:.68}
-.tool-file.merge-sortable{display:flex;align-items:center;gap:10px;touch-action:none;user-select:none}
-.merge-drag-handle{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#64748b;cursor:grab;font-size:18px;line-height:1}
-.merge-drag-handle:active{cursor:grabbing}
-.tool-file.merge-dragging{opacity:.58;box-shadow:0 8px 24px rgba(15,23,42,.12)}
-.tool-file.merge-drag-over{outline:2px solid #c7d2fe;outline-offset:2px}
-.tool-file.merge-sortable .tool-file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -124,7 +115,6 @@
     </div>
 
     <div id="toolFiles" class="tool-file-list"></div>
-    <div id="mergeFileListHint" class="merge-file-list-hint hidden">Drag <b>⋮⋮</b> to change the PDF order.</div>
 
     <div id="examResizerOptions" class="exam-resizer-options hidden">
       <div class="exam-tool-head">
