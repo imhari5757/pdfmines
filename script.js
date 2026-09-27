@@ -1314,10 +1314,14 @@ function renderToolFiles(){
   toolFiles.forEach((f,i)=>{
     const row=document.createElement("div");
     row.className=`tool-file${activeTool==="merge" ? " merge-sortable" : ""}`;
+    if(activeTool==="merge") row.draggable=true;
     row.__toolFile=f;
-    row.innerHTML=`${activeTool==="merge" ? '<span class="merge-drag-handle" role="button" tabindex="0" aria-label="Drag to reorder">⋮⋮</span>' : ""}<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
+    row.innerHTML=`${activeTool==="merge" ? '<span class="merge-drag-handle" aria-hidden="true">⋮⋮</span>' : ""}<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
     row.querySelector(".tool-file-name").textContent=f.name;
-    row.querySelector("button").onclick=()=>{
+    const removeBtn=row.querySelector("button");
+    removeBtn.onclick=e=>{
+      e.preventDefault();
+      e.stopPropagation();
       const idx=toolFiles.indexOf(f);
       if(idx>=0) toolFiles.splice(idx,1);
       renderToolFiles();
@@ -1342,119 +1346,242 @@ function syncMergeFilesFromDom(){
 }
 
 function setupMergeRowDrag(row,handle){
-  if(!handle) return;
+  if(!row) return;
 
   let ghost=null;
-  let dropLine=null;
-  let targetRow=null;
+  let pointerDrag=false;
+  let pointerId=null;
+  let pending=false;
+  let startX=0,startY=0;
+  let longPressTimer=null;
+  let dropTarget=null;
+  let dropAfter=false;
+  let dragStartedAt=0;
 
-  const clearVisuals=()=>{
+  const rows=()=>[...toolFilesEl.querySelectorAll('.merge-sortable')];
+  const clearTarget=()=>{
     toolFilesEl.querySelectorAll('.merge-drag-target').forEach(el=>el.classList.remove('merge-drag-target'));
-    if(dropLine){ dropLine.remove(); dropLine=null; }
-    targetRow=null;
+    toolFilesEl.querySelectorAll('.merge-drop-line').forEach(el=>el.remove());
+    dropTarget=null;
+    dropAfter=false;
   };
 
   const makeGhost=()=>{
     ghost=document.createElement('div');
     ghost.className='merge-drag-ghost';
-    ghost.innerHTML=`<span class="ghost-hand">✋</span><span class="ghost-name"></span>`;
+    ghost.innerHTML='<span class="ghost-hand">✋</span><span class="ghost-name"></span>';
     ghost.querySelector('.ghost-name').textContent=row.querySelector('.tool-file-name')?.textContent||'PDF';
     document.body.appendChild(ghost);
   };
 
   const moveGhost=(x,y)=>{
     if(!ghost) return;
-    const offsetX=18, offsetY=18;
     const w=ghost.offsetWidth||220, h=ghost.offsetHeight||48;
-    const left=Math.min(Math.max(8,x+offsetX),Math.max(8,window.innerWidth-w-8));
-    const top=Math.min(Math.max(8,y+offsetY),Math.max(8,window.innerHeight-h-8));
+    const left=Math.min(Math.max(8,x+16),Math.max(8,window.innerWidth-w-8));
+    const top=Math.min(Math.max(8,y+16),Math.max(8,window.innerHeight-h-8));
     ghost.style.left=`${left}px`;
     ghost.style.top=`${top}px`;
   };
 
-  const showDropTarget=(clientY)=>{
-    clearVisuals();
-    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')].filter(r=>r!==mergeDragRow);
-    if(!rows.length) return;
-    let nearest=null;
-    for(const candidate of rows){
+  const positionTarget=(clientY)=>{
+    const candidates=rows().filter(r=>r!==row);
+    clearTarget();
+    if(!candidates.length) return;
+
+    let target=null;
+    for(const candidate of candidates){
       const rect=candidate.getBoundingClientRect();
-      if(clientY < rect.top + rect.height/2){ nearest=candidate; break; }
+      if(clientY >= rect.top && clientY <= rect.bottom){
+        target=candidate;
+        break;
+      }
     }
-    targetRow=nearest;
-    dropLine=document.createElement('div');
-    dropLine.className='merge-drop-line';
-    if(nearest){
-      nearest.classList.add('merge-drag-target');
-      toolFilesEl.insertBefore(dropLine,nearest);
-    }else{
-      const last=rows[rows.length-1];
-      last.classList.add('merge-drag-target');
-      toolFilesEl.appendChild(dropLine);
+
+    // If the pointer is in the small gap between cards, use the nearest card.
+    if(!target){
+      let best=Infinity;
+      for(const candidate of candidates){
+        const rect=candidate.getBoundingClientRect();
+        const distance=clientY < rect.top ? rect.top-clientY : clientY-rect.bottom;
+        if(distance<best){ best=distance; target=candidate; }
+      }
     }
+
+    dropTarget=target;
+    dropAfter=false;
+    if(!target) return;
+
+    target.classList.add('merge-drag-target');
+    const line=document.createElement('div');
+    line.className='merge-drop-line';
+    toolFilesEl.insertBefore(line,target);
   };
 
-  const commitMove=()=>{
-    if(!mergeDragRow) return;
-    const dragged=mergeDragRow;
-    clearVisuals();
-    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')].filter(r=>r!==dragged);
-    if(targetRow && rows.includes(targetRow)) toolFilesEl.insertBefore(dragged,targetRow);
-    else toolFilesEl.appendChild(dragged);
+  const commitToTarget=(dragged, target, after)=>{
+    if(!dragged || !target || dragged===target) return;
+    const all=rows();
+    const targetIndex=all.indexOf(target);
+    if(targetIndex<0) return;
+
+    // Treat the target card as a physical slot, just like moving a file in
+    // Windows: the dragged PDF takes the target's old position and the PDF
+    // that occupied that position shifts to the next slot.
+    let insertIndex=Math.max(0,targetIndex + (after ? 1 : 0));
+    const remaining=all.filter(r=>r!==dragged);
+    insertIndex=Math.max(0,Math.min(insertIndex,remaining.length));
+    if(insertIndex===remaining.length) toolFilesEl.appendChild(dragged);
+    else toolFilesEl.insertBefore(dragged,remaining[insertIndex]);
     syncMergeFilesFromDom();
   };
 
-  const cleanup=()=>{
+  const cleanupPointer=()=>{
+    if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; }
+    pending=false;
     if(ghost){ ghost.remove(); ghost=null; }
-    clearVisuals();
-    if(mergeDragRow) mergeDragRow.classList.remove('merge-dragging');
-    mergeDragRow=null;
-    mergeDragPointerId=null;
+    clearTarget();
+    if(pointerDrag){
+      row.classList.remove('merge-dragging');
+      row.removeAttribute('aria-grabbed');
+    }
+    pointerDrag=false;
+    pointerId=null;
   };
 
-  handle.addEventListener('pointerdown',e=>{
-    if(e.button!==undefined && e.button!==0) return;
-    e.preventDefault();
+  const beginPointerDrag=(e)=>{
+    if(mergeDragRow && mergeDragRow!==row) return;
     mergeDragRow=row;
-    mergeDragPointerId=e.pointerId;
+    pointerDrag=true;
+    pointerId=e.pointerId;
+    pending=false;
+    dragStartedAt=Date.now();
     row.classList.add('merge-dragging');
+    row.setAttribute('aria-grabbed','true');
     makeGhost();
     moveGhost(e.clientX,e.clientY);
-    handle.setPointerCapture?.(e.pointerId);
+    try{ row.setPointerCapture(e.pointerId); }catch(_){ }
+  };
+
+  // Desktop: use the browser's native drag/drop model, like dragging a file
+  // in Windows Explorer. The whole PDF row is draggable; no handle is required.
+  row.addEventListener('dragstart',e=>{
+    if(e.target.closest('button')){ e.preventDefault(); return; }
+    mergeDragRow=row;
+    row.classList.add('merge-dragging');
+    row.setAttribute('aria-grabbed','true');
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',row.querySelector('.tool-file-name')?.textContent||'PDF');
+
+    const dragImage=document.createElement('div');
+    dragImage.className='merge-drag-ghost';
+    dragImage.style.position='absolute';
+    dragImage.style.left='-10000px';
+    dragImage.style.top='-10000px';
+    dragImage.innerHTML='<span class="ghost-hand">✋</span><span class="ghost-name"></span>';
+    dragImage.querySelector('.ghost-name').textContent=row.querySelector('.tool-file-name')?.textContent||'PDF';
+    document.body.appendChild(dragImage);
+    try{ e.dataTransfer.setDragImage(dragImage,24,24); }catch(_){ }
+    setTimeout(()=>dragImage.remove(),0);
   });
 
-  handle.addEventListener('pointermove',e=>{
-    if(!mergeDragRow || e.pointerId!==mergeDragPointerId) return;
+  row.addEventListener('dragover',e=>{
+    if(!mergeDragRow || mergeDragRow===row) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    clearTarget();
+    dropTarget=row;
+    dropAfter=false;
+    row.classList.add('merge-drag-target');
+    const line=document.createElement('div');
+    line.className='merge-drop-line';
+    toolFilesEl.insertBefore(line,row);
+  });
+
+  row.addEventListener('drop',e=>{
+    e.preventDefault();
+    if(!mergeDragRow || mergeDragRow===row) return;
+    const dragged=mergeDragRow;
+    const target=row;
+    commitToTarget(dragged,target,false);
+    dragged.classList.remove('merge-dragging');
+    dragged.removeAttribute('aria-grabbed');
+    mergeDragRow=null;
+    clearTarget();
+  });
+
+  row.addEventListener('dragend',()=>{
+    if(mergeDragRow===row){
+      row.classList.remove('merge-dragging');
+      row.removeAttribute('aria-grabbed');
+      mergeDragRow=null;
+    }
+    clearTarget();
+  });
+
+  // Touch: native HTML5 drag is unreliable on phones, so use a short
+  // long-press followed by the same Windows-style insertion behavior.
+  row.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='touch') return;
+    if(e.target.closest('button')) return;
+    pending=true;
+    pointerId=e.pointerId;
+    startX=e.clientX;
+    startY=e.clientY;
+    try{ row.setPointerCapture(e.pointerId); }catch(_){ }
+    longPressTimer=setTimeout(()=>{
+      if(!pending || pointerId!==e.pointerId) return;
+      beginPointerDrag(e);
+    },280);
+  },{passive:false});
+
+  row.addEventListener('pointermove',e=>{
+    if(e.pointerType!=='touch') return;
+    if(pending && !pointerDrag && e.pointerId===pointerId){
+      if(Math.hypot(e.clientX-startX,e.clientY-startY)>12){
+        if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer=null; }
+        pending=false;
+        try{ row.releasePointerCapture(e.pointerId); }catch(_){ }
+      }
+      return;
+    }
+    if(!pointerDrag || e.pointerId!==pointerId) return;
     e.preventDefault();
     moveGhost(e.clientX,e.clientY);
-    showDropTarget(e.clientY);
-  });
+    positionTarget(e.clientY);
+  },{passive:false});
 
-  const finish=()=>{
-    if(!mergeDragRow) return;
-    commitMove();
-    cleanup();
+  const finishPointer=e=>{
+    if(e.pointerType!=='touch') return;
+    if(!pointerDrag || e.pointerId!==pointerId){ cleanupPointer(); return; }
+    const target=dropTarget;
+    const after=dropAfter;
+    const dragged=row;
+    if(target && target!==dragged) commitToTarget(dragged,target,after);
+    cleanupPointer();
+    mergeDragRow=null;
   };
-  handle.addEventListener('pointerup',finish);
-  handle.addEventListener('pointercancel',cleanup);
-  handle.addEventListener('lostpointercapture',()=>{
-    if(mergeDragRow) finish();
-  });
 
-  handle.addEventListener('keydown',e=>{
+  row.addEventListener('pointerup',finishPointer,{passive:false});
+  row.addEventListener('pointercancel',()=>{
+    if(pointerDrag) mergeDragRow=null;
+    cleanupPointer();
+  },{passive:false});
+
+  // Keyboard reorder remains available for accessibility.
+  handle?.addEventListener('keydown',e=>{
     if(e.key!=='ArrowUp' && e.key!=='ArrowDown') return;
     e.preventDefault();
-    const rows=[...toolFilesEl.querySelectorAll('.merge-sortable')];
-    const idx=rows.indexOf(row);
+    const list=rows();
+    const idx=list.indexOf(row);
     if(idx<0) return;
     const next=e.key==='ArrowUp' ? idx-1 : idx+1;
-    if(next<0 || next>=rows.length) return;
-    if(e.key==='ArrowUp') toolFilesEl.insertBefore(row,rows[next]);
-    else toolFilesEl.insertBefore(row,rows[next].nextSibling);
+    if(next<0 || next>=list.length) return;
+    if(e.key==='ArrowUp') toolFilesEl.insertBefore(row,list[next]);
+    else toolFilesEl.insertBefore(row,list[next].nextSibling);
     syncMergeFilesFromDom();
     handle.focus();
   });
 }
+
 function ensurePDFLib(){
   if(!window.PDFLib) throw new Error("PDF engine could not load. Please reload the page.");
   return window.PDFLib;

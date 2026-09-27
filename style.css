@@ -267,3 +267,30 @@ body.modal-open{overflow:hidden}
 /* v59 exam workspace refinements */
 .exam-crop-save-row{position:relative;z-index:5;flex-wrap:wrap}.exam-crop-save-row .btn{white-space:nowrap}.exam-fit-row{flex-wrap:wrap}.exam-fit-row span{display:inline-flex;align-items:center}.exam-final-card{margin-top:14px;padding:14px;border:1px solid #e2e5ed;border-radius:14px;background:#fff}.exam-final-preview-wrap{min-height:180px;display:grid;place-items:center;padding:12px;border-radius:12px;background:#f3f5f9;border:1px solid #e2e5ed}.exam-final-preview-wrap canvas{display:block;max-width:100%;max-height:260px;width:auto;height:auto;box-shadow:0 5px 18px rgba(20,30,50,.08);background:#fff}.exam-ready-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}.exam-ready-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.04em;background:#f0f2f6;color:#687082}.exam-ready-badge.ready{background:#eaf8f0;color:#237447}.exam-ready-badge.needs{background:#fff0f0;color:#a52f2f}.exam-ready-row span:last-child{font-size:11px;color:#687082}.exam-crop-save-row .btn.primary{box-shadow:0 4px 12px rgba(59,91,219,.16)}
 @media(max-width:600px){.exam-crop-save-row{position:sticky;bottom:8px;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);padding:9px;border:1px solid #e2e5ed;border-radius:12px;box-shadow:0 8px 22px rgba(20,30,50,.12);margin-left:-2px;margin-right:-2px}.exam-crop-save-row span{width:100%}.exam-final-preview-wrap{min-height:150px}.exam-fit-row{gap:7px}.exam-fit-row span{font-size:10px}}
+
+/* PDFMines external stylesheet */
+.exam-filter-toggle-row{display:flex;align-items:center;gap:10px;margin-top:10px}.exam-filter-status{font-size:.78rem;font-weight:700;opacity:.68}.exam-filter-panel{margin-top:10px;padding:12px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}.exam-filter-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;flex-wrap:wrap}.exam-filter-panel.hidden{display:none}.exam-filter-panel .exam-enhance-note{margin-top:9px}
+.exam-zoom-control{min-width:0}.exam-slider-label{display:flex;align-items:center;justify-content:space-between;gap:8px}.exam-slider-label output{font-weight:800;font-variant-numeric:tabular-nums}.exam-zoom-track{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}.exam-zoom-track>span{font-size:.72rem;white-space:nowrap;opacity:.72}.exam-zoom-track input{width:100%}.exam-slider-subnote{display:flex;justify-content:space-between;gap:8px;font-size:.68rem;opacity:.62;margin-top:3px}.exam-crop-editor canvas{display:block;max-width:100%;height:auto}.exam-live-crop-dimensions{margin:8px 0 2px;padding:9px 12px;border-radius:10px;background:#f5f7fb;color:#1e293b;font-weight:800;font-size:.82rem;text-align:center;font-variant-numeric:tabular-nums}.exam-live-crop-dimensions small{font-weight:600;opacity:.65}
+/* v77: keep the editing preview visible while the controls below it are adjusted. */
+.exam-adjust-card{position:relative;overflow:visible}
+.exam-preview-wrap.exam-crop-editor{position:sticky;top:0;z-index:30;isolation:isolate;background:#fff;border-radius:14px;padding:8px;box-shadow:0 5px 18px rgba(15,23,42,.10);border:1px solid #e2e8f0}
+.exam-preview-wrap.exam-crop-editor::before{content:"Editing preview";display:block;font-size:.72rem;font-weight:800;letter-spacing:.02em;opacity:.65;padding:1px 4px 6px}
+.exam-preview-wrap.exam-crop-editor canvas{max-height:42vh;object-fit:contain;margin:0 auto}
+@media (max-width:640px){.exam-preview-wrap.exam-crop-editor{top:0;padding:6px;border-radius:12px}.exam-preview-wrap.exam-crop-editor::before{font-size:.68rem;padding-bottom:4px}.exam-preview-wrap.exam-crop-editor canvas{max-height:36vh}}
+
+
+/* Merge PDF: touch-friendly drag reorder */
+.merge-file-list-hint{margin:8px 0 0;font-size:.78rem;opacity:.68}
+.tool-file.merge-sortable{display:flex;align-items:center;gap:10px;touch-action:pan-y;user-select:none;cursor:grab;position:relative;transition:transform .12s,opacity .12s,box-shadow .12s,background .12s,border-color .12s}
+.tool-file.merge-sortable:active,.tool-file.merge-dragging{cursor:grabbing}
+.tool-file.merge-sortable .merge-drag-handle{touch-action:none;pointer-events:none}
+.tool-file.merge-sortable .tool-file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.merge-drag-handle{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#64748b;cursor:grab;font-size:18px;line-height:1}
+.merge-drag-handle:active{cursor:grabbing}
+.tool-file.merge-dragging{opacity:.30;box-shadow:none;transform:scale(.985)}
+.tool-file.merge-drag-target{outline:2px solid #6366f1;outline-offset:2px;background:#eef2ff;box-shadow:0 8px 24px rgba(79,70,229,.14);transform:translateY(1px)}
+.merge-drop-line{height:4px;border-radius:999px;background:#6366f1;margin:4px 8px;box-shadow:0 0 0 2px rgba(99,102,241,.12);pointer-events:none;position:relative;z-index:5}
+.merge-drag-ghost{position:fixed;z-index:9999;pointer-events:none;display:flex;align-items:center;gap:10px;min-width:180px;max-width:min(360px,calc(100vw - 24px));padding:10px 12px;border:1px solid #c7d2fe;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 16px 40px rgba(15,23,42,.22);transform:translate3d(0,0,0) rotate(2deg) scale(1.02);font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.merge-drag-ghost .ghost-hand{font-size:20px;flex:0 0 auto}
+.merge-drag-ghost .ghost-name{overflow:hidden;text-overflow:ellipsis}
+.tool-file.merge-sortable .tool-file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
