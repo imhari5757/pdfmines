@@ -1015,6 +1015,7 @@ const toolInput = $("toolInput");
 const toolDrop = $("toolDrop");
 const toolChoose = $("toolChoose");
 const toolFilesEl = $("toolFiles");
+const mergeFileListHint = $("mergeFileListHint");
 const toolRun = $("toolRun");
 const toolStatus = $("toolStatus");
 const toolTitle = $("toolModalTitle");
@@ -1024,6 +1025,9 @@ const toolDropHint = $("toolDropHint");
 const splitPagesWrap = $("splitPagesWrap");
 const rotateAngleWrap = $("rotateAngleWrap");
 const numberOptionsWrap = $("numberOptionsWrap");
+const compressOptionsWrap = $("compressOptionsWrap");
+const compressTargetSize = $("compressTargetSize");
+const compressTargetUnit = $("compressTargetUnit");
 const numberPositionGrid = $("numberPositionGrid");
 const pdfImageOptions = $("pdfImageOptions");
 const pdfImageFormat = $("pdfImageFormat");
@@ -1197,6 +1201,8 @@ function openTool(name){
     document.querySelectorAll('input[name="splitOutput"]').forEach(r=>r.checked=(r.value==="single"));
   }
   numberOptionsWrap.classList.toggle("hidden",name!=="number");
+  compressOptionsWrap?.classList.toggle("hidden",name!=="compress");
+  if(name!=="compress") { if(compressTargetSize) compressTargetSize.value=""; if(compressTargetUnit) compressTargetUnit.value="KB"; }
   pdfImageOptions?.classList.toggle("hidden",name!=="pdf2image");
   examResizerOptions?.classList.toggle("hidden",name!=="exam-resizer");
   if(name!=="pdf2image" && pdfImagePreview){
@@ -1302,15 +1308,93 @@ toolInput.addEventListener("change",async()=>{
 
 function renderToolFiles(){
   toolFilesEl.innerHTML="";
+  if(mergeFileListHint){
+    mergeFileListHint.classList.toggle("hidden",activeTool!=="merge" || toolFiles.length<2);
+  }
   toolFiles.forEach((f,i)=>{
     const row=document.createElement("div");
-    row.className="tool-file";
-    row.innerHTML=`<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
+    row.className=`tool-file${activeTool==="merge" ? " merge-sortable" : ""}`;
+    row.__toolFile=f;
+    row.innerHTML=`${activeTool==="merge" ? '<span class="merge-drag-handle" role="button" tabindex="0" aria-label="Drag to reorder">⋮⋮</span>' : ""}<span class="tool-file-num">${String(i+1).padStart(2,"0")}</span><span class="tool-file-name"></span><button type="button" aria-label="Remove">×</button>`;
     row.querySelector(".tool-file-name").textContent=f.name;
     row.querySelector("button").onclick=()=>{
-      toolFiles.splice(i,1); renderToolFiles();
+      const idx=toolFiles.indexOf(f);
+      if(idx>=0) toolFiles.splice(idx,1);
+      renderToolFiles();
     };
+    if(activeTool==="merge") setupMergeRowDrag(row,row.querySelector(".merge-drag-handle"));
     toolFilesEl.append(row);
+  });
+}
+
+let mergeDragRow=null;
+let mergeDragPointerId=null;
+
+function syncMergeFilesFromDom(){
+  if(activeTool!=="merge") return;
+  toolFiles=[...toolFilesEl.querySelectorAll(".merge-sortable")]
+    .map(row=>row.__toolFile)
+    .filter(Boolean);
+  [...toolFilesEl.querySelectorAll(".merge-sortable")].forEach((row,i)=>{
+    const num=row.querySelector(".tool-file-num");
+    if(num) num.textContent=String(i+1).padStart(2,"0");
+  });
+}
+
+function setupMergeRowDrag(row,handle){
+  if(!handle) return;
+  const moveRow=(clientY)=>{
+    if(!mergeDragRow) return;
+    const rows=[...toolFilesEl.querySelectorAll(".merge-sortable")].filter(r=>r!==mergeDragRow);
+    let target=null;
+    for(const candidate of rows){
+      const rect=candidate.getBoundingClientRect();
+      if(clientY < rect.top + rect.height/2){ target=candidate; break; }
+    }
+    if(target) toolFilesEl.insertBefore(mergeDragRow,target);
+    else toolFilesEl.appendChild(mergeDragRow);
+    [...toolFilesEl.querySelectorAll(".merge-sortable")].forEach((r,i)=>{
+      const num=r.querySelector(".tool-file-num");
+      if(num) num.textContent=String(i+1).padStart(2,"0");
+    });
+  };
+
+  handle.addEventListener("pointerdown",e=>{
+    if(e.button!==undefined && e.button!==0) return;
+    e.preventDefault();
+    mergeDragRow=row;
+    mergeDragPointerId=e.pointerId;
+    row.classList.add("merge-dragging");
+    handle.setPointerCapture?.(e.pointerId);
+  });
+  handle.addEventListener("pointermove",e=>{
+    if(!mergeDragRow || e.pointerId!==mergeDragPointerId) return;
+    e.preventDefault();
+    moveRow(e.clientY);
+  });
+  const finish=()=>{
+    if(!mergeDragRow) return;
+    mergeDragRow.classList.remove("merge-dragging");
+    syncMergeFilesFromDom();
+    mergeDragRow=null;
+    mergeDragPointerId=null;
+  };
+  handle.addEventListener("pointerup",finish);
+  handle.addEventListener("pointercancel",finish);
+  handle.addEventListener("lostpointercapture",finish);
+
+  handle.addEventListener("keydown",e=>{
+    if(e.key!=="ArrowUp" && e.key!=="ArrowDown") return;
+    e.preventDefault();
+    const rows=[...toolFilesEl.querySelectorAll(".merge-sortable")];
+    const idx=rows.indexOf(row);
+    if(idx<0) return;
+    const next=e.key==="ArrowUp" ? idx-1 : idx+1;
+    if(next<0 || next>=rows.length) return;
+    if(e.key==="ArrowUp") toolFilesEl.insertBefore(row,rows[next]);
+    else toolFilesEl.insertBefore(row,rows[next].nextSibling);
+    syncMergeFilesFromDom();
+    handle.focus();
   });
 }
 
@@ -1512,10 +1596,61 @@ async function mixFiles(items){
   return await out.save({useObjectStreams:true});
 }
 
-async function optimizePdf(file){
+async function optimizePdf(file,targetBytes=0){
   const {PDFDocument}=ensurePDFLib();
-  const doc=await PDFDocument.load(await readBytes(file));
-  return await doc.save({useObjectStreams:true,addDefaultPage:false,updateFieldAppearances:false});
+  const original=await readBytes(file);
+  const doc=await PDFDocument.load(original);
+  const optimized=await doc.save({useObjectStreams:true,addDefaultPage:false,updateFieldAppearances:false});
+
+  // First try a lossless structural save. If it already meets the requested
+  // target, keep the original PDF content and text/searchability intact.
+  if(!targetBytes || optimized.length<=targetBytes) return optimized;
+
+  if(!window.pdfjsLib) throw new Error("PDF rendering engine is unavailable. Please reload the page and try again.");
+
+  // A target below the lossless result requires image-based recompression.
+  // This is deliberately best-effort: rasterizing a PDF can reduce text
+  // searchability, so it is only used when the requested target demands it.
+  const sourcePdf=await window.pdfjsLib.getDocument({data:original}).promise;
+  const attempts=[
+    {scale:1.00,quality:0.78},
+    {scale:0.90,quality:0.68},
+    {scale:0.80,quality:0.60},
+    {scale:0.70,quality:0.52},
+    {scale:0.60,quality:0.44},
+    {scale:0.50,quality:0.36}
+  ];
+
+  let best=optimized;
+  for(const attempt of attempts){
+    const out=await PDFDocument.create();
+    for(let i=1;i<=sourcePdf.numPages;i++){
+      const page=await sourcePdf.getPage(i);
+      const baseViewport=page.getViewport({scale:1});
+      const viewport=page.getViewport({scale:attempt.scale});
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.max(1,Math.ceil(viewport.width));
+      canvas.height=Math.max(1,Math.ceil(viewport.height));
+      const ctx=canvas.getContext("2d",{alpha:false});
+      if(!ctx) throw new Error("Could not create a PDF compression canvas.");
+      ctx.fillStyle="#fff";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      await page.render({canvasContext:ctx,viewport}).promise;
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Could not encode a compressed PDF page.")),"image/jpeg",attempt.quality));
+      const jpg=new Uint8Array(await blob.arrayBuffer());
+      const img=await out.embedJpg(jpg);
+      const outPage=out.addPage([baseViewport.width,baseViewport.height]);
+      outPage.drawImage(img,{x:0,y:0,width:baseViewport.width,height:baseViewport.height});
+      canvas.width=1;canvas.height=1;
+      page.cleanup?.();
+      if(i<sourcePdf.numPages) await new Promise(r=>setTimeout(r,0));
+    }
+    const bytes=await out.save({useObjectStreams:true,addDefaultPage:false});
+    best=bytes;
+    if(bytes.length<=targetBytes) break;
+  }
+  await sourcePdf.destroy();
+  return best;
 }
 
 function parsePageSelection(text,count){
@@ -2694,7 +2829,38 @@ toolRun.onclick=async()=>{
     let bytes;
     if(activeTool==="merge") bytes=await mergePdfFiles(toolFiles);
     else if(activeTool==="mix") bytes=await mixFiles(toolFiles);
-    else if(activeTool==="compress") bytes=await optimizePdf(toolFiles[0]);
+    else if(activeTool==="compress") {
+      const percentRaw=compressPercent?.value?.trim()||"";
+      const sizeRaw=compressTargetSize?.value?.trim()||"";
+      if(percentRaw && sizeRaw) throw new Error("Choose either % of original or target size, not both.");
+
+      const originalBytes=(await readBytes(toolFiles[0])).length;
+      let targetBytes=0;
+      let targetText="automatic";
+
+      if(percentRaw) {
+        const percent=Number(percentRaw);
+        if(!Number.isFinite(percent) || percent<5 || percent>80 || percent%5!==0)
+          throw new Error("Choose a percentage from 5% to 80% in multiples of 5.");
+        targetBytes=Math.max(1,Math.round(originalBytes*(percent/100)));
+        targetText=`${percent}% of original`;
+      } else if(sizeRaw) {
+        const value=Number(sizeRaw);
+        if(value<=0 || !Number.isFinite(value)) throw new Error("Enter a valid target size.");
+        const unit=compressTargetUnit?.value||"KB";
+        targetBytes=Math.max(1,Math.round(value*(unit==="MB"?1024*1024:1024)));
+        targetText=`${value} ${unit}`;
+      }
+
+      bytes=await optimizePdf(toolFiles[0],targetBytes);
+      const actual=bytes.length;
+      if(targetBytes && actual>targetBytes)
+        toolStatus.textContent=`Done ✓  ${Math.round(actual/1024)} KB — best effort; target ${targetText} could not be reached.`;
+      else if(targetBytes)
+        toolStatus.textContent=`Done ✓  ${Math.round(actual/1024)} KB — target ${targetText} reached.`;
+      else
+        toolStatus.textContent=`Done ✓  ${Math.round(actual/1024)} KB — optimized locally.`;
+    }
     else if(activeTool==="split") {
       const separate=document.querySelector('input[name="splitOutput"]:checked')?.value==="separate";
       const result=await splitPdf(toolFiles[0],separate);
@@ -2731,7 +2897,7 @@ toolRun.onclick=async()=>{
       "PDFMines_Numbered";
     downloadToolBytes(bytes,`${base}_${new Date().toISOString().slice(0,10)}.pdf`);
     const kb=Math.round(bytes.length/1024);
-    toolStatus.textContent=`Done ✓  ${kb} KB — downloaded to your device.`;
+    if(activeTool!=="compress") toolStatus.textContent=`Done ✓  ${kb} KB — downloaded to your device.`;
   }catch(err){
     console.error(err);
     toolStatus.textContent=err?.message || "Could not process this PDF.";

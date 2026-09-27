@@ -16,6 +16,15 @@
 .exam-preview-wrap.exam-crop-editor canvas{max-height:42vh;object-fit:contain;margin:0 auto}
 @media (max-width:640px){.exam-preview-wrap.exam-crop-editor{top:0;padding:6px;border-radius:12px}.exam-preview-wrap.exam-crop-editor::before{font-size:.68rem;padding-bottom:4px}.exam-preview-wrap.exam-crop-editor canvas{max-height:36vh}}
 
+
+/* Merge PDF: touch-friendly drag reorder */
+.merge-file-list-hint{margin:8px 0 0;font-size:.78rem;opacity:.68}
+.tool-file.merge-sortable{display:flex;align-items:center;gap:10px;touch-action:none;user-select:none}
+.merge-drag-handle{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#64748b;cursor:grab;font-size:18px;line-height:1}
+.merge-drag-handle:active{cursor:grabbing}
+.tool-file.merge-dragging{opacity:.58;box-shadow:0 8px 24px rgba(15,23,42,.12)}
+.tool-file.merge-drag-over{outline:2px solid #c7d2fe;outline-offset:2px}
+.tool-file.merge-sortable .tool-file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -115,6 +124,7 @@
     </div>
 
     <div id="toolFiles" class="tool-file-list"></div>
+    <div id="mergeFileListHint" class="merge-file-list-hint hidden">Drag <b>⋮⋮</b> to change the PDF order.</div>
 
     <div id="examResizerOptions" class="exam-resizer-options hidden">
       <div class="exam-tool-head">
@@ -236,6 +246,45 @@
           </div>
         </div>
       </div>
+      <div id="compressOptionsWrap" class="compress-options hidden">
+        <div class="number-options-title">Compression target</div>
+        <div class="compress-target-row">
+          <label class="tool-option">Output size as % of original PDF
+            <select id="compressPercent" aria-label="Output size as percentage of original PDF">
+              <option value="">Choose percentage</option>
+              <option value="5">5% of original</option>
+              <option value="10">10% of original</option>
+              <option value="15">15% of original</option>
+              <option value="20">20% of original</option>
+              <option value="25">25% of original</option>
+              <option value="30">30% of original</option>
+              <option value="35">35% of original</option>
+              <option value="40">40% of original</option>
+              <option value="45">45% of original</option>
+              <option value="50">50% of original</option>
+              <option value="55">55% of original</option>
+              <option value="60">60% of original</option>
+              <option value="65">65% of original</option>
+              <option value="70">70% of original</option>
+              <option value="75">75% of original</option>
+              <option value="80">80% of original</option>
+            </select>
+          </label>
+        </div>
+        <div class="compress-target-row">
+          <label class="tool-option">Or enter target PDF size
+            <div class="size-input">
+              <input id="compressTargetSize" type="number" min="10" step="1" inputmode="decimal" placeholder="Optional">
+              <select id="compressTargetUnit" aria-label="Compression target unit">
+                <option value="KB">KB</option>
+                <option value="MB">MB</option>
+              </select>
+            </div>
+          </label>
+        </div>
+        <small class="option-hint">Choose either a percentage of the original PDF or a target size. The compressor uses the selected target on a best-effort basis. Very small targets may require rasterization and can reduce text quality.</small>
+      </div>
+
       <label id="rotateAngleWrap" class="tool-option hidden">Rotation
         <select id="rotateAngle"><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">270° clockwise</option></select>
       </label>
